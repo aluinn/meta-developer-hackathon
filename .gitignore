@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Large scan files
+/scans/
+*.glb
+*.usdz
+*.obj
+*.ply
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

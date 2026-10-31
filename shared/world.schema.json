@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "world.schema.json",
+  "title": "World",
+  "description": "Handover contract between the server (scan to world.json) and the web app (simulation). Units are metres, y-axis up.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "source_scan", "room", "objects", "spawn", "goal"],
+  "properties": {
+    "version": { "type": "integer", "minimum": 1 },
+    "source_scan": { "type": "string", "description": "Filename of the scan this world was built from." },
+    "room": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bounds", "floor_y"],
+      "properties": {
+        "bounds": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["min", "max"],
+          "properties": {
+            "min": { "$ref": "#/$defs/vec3" },
+            "max": { "$ref": "#/$defs/vec3" }
+          }
+        },
+        "floor_y": { "type": "number" }
+      }
+    },
+    "objects": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/object" }
+    },
+    "spawn": { "$ref": "#/$defs/vec3" },
+    "goal": { "$ref": "#/$defs/vec3" }
+  },
+  "$defs": {
+    "vec3": {
+      "type": "array",
+      "items": { "type": "number" },
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "object": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "role", "confidence", "position", "size", "rotation_y"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "role": { "enum": ["fixed", "movable", "climbable", "passable"] },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "position": { "$ref": "#/$defs/vec3", "description": "Centre of the box, metres." },
+        "size": {
+          "type": "array",
+          "items": { "type": "number", "exclusiveMinimum": 0 },
+          "minItems": 3,
+          "maxItems": 3,
+          "description": "[width (x), height (y), depth (z)], metres."
+        },
+        "rotation_y": { "type": "number", "description": "Rotation around the y-axis, radians." }
+      }
+    }
+  }
+}
