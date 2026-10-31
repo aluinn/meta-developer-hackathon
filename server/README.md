@@ -29,6 +29,17 @@ Activate it again each time you open a new terminal.
 Then open http://localhost:8000/health. You should see `{"status":"ok"}`.
 Auto-generated docs: http://localhost:8000/docs
 
+## Upload a scan (A1)
+
+`POST /scan` takes a `.glb` or `.obj` file (max 100MB), saves it under `server/scans/`
+(git-ignored), simplifies it to about 50,000 triangles and returns
+`{"scan_id", "triangles_before", "triangles_after"}`.
+
+With the server running, in a second terminal (venv active):
+
+    python scripts/upload_test.py path/to/room.glb
+    python scripts/upload_test.py --make-test-mesh     # no scan handy? uses a generated sphere
+
 ## Secrets
 
 Never put API keys in code. Copy `../.env.example` to `../.env`, fill in your own

@@ -12,6 +12,11 @@ Check the licence of anything new BEFORE adding it, then list it here.
 | fastapi | server | MIT |
 | uvicorn | server | BSD-3-Clause |
 | jsonschema | server | MIT |
+| trimesh | server (load/export meshes) | MIT |
+| fast-simplification | server (mesh decimation, used by trimesh) | MIT |
+| numpy | server (used by trimesh) | BSD-3-Clause |
+| python-multipart | server (file uploads) | Apache-2.0 |
+| requests | server (test upload script) | Apache-2.0 |
 
 All art, models, sounds and text in this repo must be original or clearly
 licensed for reuse. Note any exception, with its source and licence, below.
