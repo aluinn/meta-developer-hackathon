@@ -10,6 +10,7 @@ from PIL import Image
 from scipy import ndimage
 
 from .annotate import draw_boxes
+from .geometry import half_extents
 from .roles import RoleAssigner, png_bytes, resolve_roles
 
 SCHEMA_PATH = Path(__file__).resolve().parents[2] / "shared" / "world.schema.json"
@@ -29,9 +30,9 @@ def free_floor_grid(bounds_min, bounds_max, objects: list[dict]) -> tuple[np.nda
         if obj["role"] == "passable":
             continue
         cx, _, cz = obj["position"]
-        w, _, d = obj["size"]
-        in_x = np.abs(xs - cx) <= w / 2 + PERSON_RADIUS
-        in_z = np.abs(zs - cz) <= d / 2 + PERSON_RADIUS
+        hx, hz = half_extents(obj)
+        in_x = np.abs(xs - cx) <= hx + PERSON_RADIUS
+        in_z = np.abs(zs - cz) <= hz + PERSON_RADIUS
         free[np.ix_(in_z, in_x)] = False
     return free, xs, zs
 

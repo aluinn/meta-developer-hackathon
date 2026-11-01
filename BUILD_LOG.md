@@ -14,6 +14,14 @@ Add a new entry at the TOP after each work session. Copy the template.
 
 ---
 
+## 2026-11-01 - Aluinn (A4)
+- What I did: `POST /transcribe` (`transcribe.py`): accepts browser audio, converts any 16-bit PCM WAV to mono 16 kHz in Python (Meta accepts only WAV), calls `POST https://api.meta.ai/v1/asr/transcribe` with `muse-voice-transcribe-1.0`. `POST /layout` (`layout.py`, `labelling/layout.py`): Muse Spark proposes x/z (+ optional quarter turn) for movable objects; code rejects non-movable ids, objects outside the room, and overlaps with any non-passable object; one retry with the problems as feedback, else 422; returns a schema-valid world.json, a reason per change and a spawn-to-goal walkability flag. Wrote `docs/architecture.md`.
+- What worked / what didn't: offline tests pass (`test_layout_synthetic.py`: 3 goals + 8 rejection cases; `test_transcribe_synthetic.py`: audio conversion and the exact Meta request format). The "model" in the layout test is a scripted stand-in I wrote, so it tests our checks, not Muse Spark's judgement. NOT tested: real Muse Spark/Voice calls (no API key). Found and fixed a bug in my own `shared/example_world.json`: the bookshelf's `rotation_y` of 1.5708 turned it sideways through the east wall; now 0. Browsers do not record WAV, and there is no ffmpeg on this Mac, so webm/ogg/mp4 audio gets a 415 until Zac encodes WAV in the browser or the server host has ffmpeg.
+- AI tools used (and for what): Claude Code, to read the Meta docs and write the code and tests.
+- Next: MODEL_API_KEY + a real scan to run A1 -> A2 -> A3 -> A4 end to end. Then A5.
+
+---
+
 ## 2026-11-01 - Aluinn (A3)
 - What I did: `labelling/roles.py` asks Muse Spark (`muse-spark-1.3`, Responses API, `input_image` parts, `text.format` json_schema) for a role + confidence per object, shown the 8 views with the A2 boxes drawn on and tagged with ids. `labelling/world.py` builds world.json (room bounds and floor_y from the mesh, spawn and goal on free floor, farthest walkable cell from spawn) and validates it against `shared/world.schema.json`. Endpoints: `POST /scan/{scan_id}/world`, `GET /world/{scan_id}`. Script: `scripts/make_world.py`.
 - What worked / what didn't: offline test passes (fake Muse Spark with an invalid role, a missing object and confidence 1.4: fallbacks and clamping work, output validates, spawn/goal are on free floor and 3m+ apart, GET works, path traversal rejected). NOT tested: the real Muse Spark call (no API key). `shared/real_world_01.json` NOT created: no real scan has been labelled yet; fabricating one would mislead Zac.

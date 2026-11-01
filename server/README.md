@@ -72,6 +72,18 @@ Notes: `rotation_y` is always 0 for now (A2 boxes are axis-aligned). An object's
 If the model gives no valid role for an object, a default for its label is used at
 confidence 0.3 (see `roles_detail.json`, `"source": "fallback"`).
 
+## Voice and layout (A4)
+
+`POST /transcribe` takes an `audio` file (multipart) and returns `{"transcript", "duration_ms"}` using
+`muse-voice-transcribe-1.0`. Meta only accepts mono 16-bit PCM WAV: we convert any 16-bit PCM WAV ourselves, and
+WebM/Ogg/MP4 only if `ffmpeg` is installed (otherwise 415).
+
+`POST /layout` takes `{"scan_id", "goal", "world"?}`, asks Muse Spark to move **movable** objects only, rejects
+proposals that leave the room or overlap other solid objects (one retry), and returns a new valid world.json plus a
+reason per change. See `docs/architecture.md` for the exact response.
+
+Offline tests (no key, no API calls): `python scripts/test_layout_synthetic.py`, `python scripts/test_transcribe_synthetic.py`
+
 ## Secrets
 
 Never put API keys in code. Copy `../.env.example` to `.env` (in `server/` or the repo root), fill in your own
