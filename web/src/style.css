@@ -316,3 +316,44 @@ p:focus {
     width: 22rem;
   }
 }
+
+/* ---- Short screens (phone held sideways): give the 3D view the room ---- */
+
+@media (max-height: 500px) {
+  .screen-results {
+    gap: 0.5rem;
+    padding-top: max(0.5rem, env(safe-area-inset-top));
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+
+  .results-header h1 {
+    font-size: 1.1rem;
+    margin: 0;
+  }
+
+  .results-detail {
+    display: none;
+  }
+
+  .results-header .btn-small {
+    min-height: 2.5rem;
+  }
+
+  .tabbar {
+    align-self: center;
+    width: 16rem;
+    padding: 0.2rem;
+  }
+
+  .tab {
+    min-height: 2.5rem;
+  }
+
+  .legend {
+    display: grid;
+    grid-template-columns: repeat(3, auto);
+    column-gap: 0.8rem;
+    font-size: 0.65rem;
+    line-height: 1.3;
+  }
+}
