@@ -1,0 +1,16 @@
+# Render "Blueprint": New > Blueprint > pick this repo. See docs/deployment.md.
+services:
+  - type: web
+    name: room-world-server
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      # sync: false = Render asks you for the value in its dashboard. The key is never stored in this repo.
+      - key: MODEL_API_KEY
+        sync: false
+      # The web app's address(es), comma-separated, e.g. https://room-world.vercel.app
+      - key: ALLOWED_ORIGINS
+        sync: false

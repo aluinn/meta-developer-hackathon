@@ -92,6 +92,16 @@ changed between the two worlds, and returns `before_url` / `after_url` plus a `c
 
 Offline test (no key): `python scripts/test_render_synthetic.py`
 
+## Score (A6)
+
+`GET /score/{scan_id}`: how well `world.json` matches the scanned room (SAM on a render of the world vs SAM on the scan, per object).
+Costs about $0.16 the first time (64 SAM calls), then served from `score.json`; add `?refresh=true` to recompute.
+Offline test: `python scripts/test_score_synthetic.py`
+
+## CORS and deployment
+
+The web app's address must be in `ALLOWED_ORIGINS` (default: `http://localhost:5173`, so local development works). To deploy, see `../docs/deployment.md`.
+
 ## Secrets
 
 Never put API keys in code. Copy `../.env.example` to `.env` (in `server/` or the repo root), fill in your own

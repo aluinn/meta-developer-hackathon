@@ -37,6 +37,10 @@ class Camera:
         up = np.cross(right, forward)
         return right, up, forward
 
+    @classmethod
+    def from_dict(cls, data: dict) -> "Camera":
+        return cls(np.array(data["position"], dtype=float), np.array(data["look_at"], dtype=float), data.get("fov_degrees", FOV_DEGREES))
+
     def to_dict(self) -> dict:
         right, up, forward = self.axes()
         return {

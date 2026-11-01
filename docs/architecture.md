@@ -1,6 +1,6 @@
 # Architecture
 
-How Room world fits together. Status as of 2026-11-01: **A1 to A5 are built on `aluinn/start` and tested offline
+How Room world fits together. Status as of 2026-11-01: **A1 to A6 are built on `aluinn/start` and tested offline
 only.** The real Meta calls (SAM, Muse Spark, Voice Transcribe) have not been run yet (no API key was available).
 
 ## The big picture
@@ -53,13 +53,14 @@ API keys stay on the server (`MODEL_API_KEY` in `.env`, git-ignored). The browse
 | A4 | `POST /transcribe` | browser audio -> transcript | yes (`muse-voice-transcribe-1.0`) | conversion and request format tested; **real call untested** |
 | A4 | `POST /layout` | goal text + world -> new valid `world.json` + a reason per change | yes (`muse-spark-1.3`) | validation/retry tested with a scripted stand-in; **real model untested** |
 | A5 | `POST /render`, `GET /render/{scan_id}/before\|after` | photo + old and new world -> before/after images (Muse Image edit, only moved objects change) | yes (`muse-image-1.0`) | request format, prompt and checks tested with a fake model; **real call untested** |
+| A6 | `GET /score/{scan_id}` | scan-versus-simulation match score (SAM on a render of world.json vs the scan's SAM masks) | yes (`sam-3.1`) | maths and caching tested with a fake SAM; **real SAM untested** |
 | | `GET /health` | `{"status":"ok"}` | no | |
 
 Interactive docs while the server runs: http://localhost:8000/docs
 
 ### Files kept per scan (`server/scans/<scan_id>/`, git-ignored)
 `original.*` (upload), `simplified.glb` (A1), `views/` (A2 renders and per-pixel triangle ids), `labels.json` (A2),
-`world.json` and `roles_detail.json` (A3), `layout.json` (A4, latest proposal), `render/before.png` and `render/after.png` (A5).
+`world.json` and `roles_detail.json` (A3), `layout.json` (A4, latest proposal), `render/before.png` and `render/after.png` (A5), `views/masks.npz` (every SAM mask from A2) and `score.json` (A6).
 
 ## The world.json contract
 Metres, y-up. `position` is the box centre; `size` is [width x, height y, depth z] before rotation; `rotation_y` is in
@@ -117,12 +118,47 @@ and asks `muse-image-1.0` (`POST /v1/images/edits`) to move only those and keep 
 **Character image** (Z3): `server/scripts/make_character.py` generates an original character from the prompt in
 `docs/character-prompt.md` and saves it to `web/public/assets/character.png` (white background removed). See that doc for status.
 
-## Proposed, not built yet: A6 (score + deploy)
-_Proposal for the two of us to agree before building._
-A6 returns a scan-versus-simulation match score; Z4 produces the walkability score. Both are shown on the results screen.
+## A6: scan-versus-simulation score
+
+**`GET /score/{scan_id}`** (Z6 can show it on the results screen) returns how well `world.json` reproduces the scanned room:
+```json
+{
+  "scan_id": "...", "overall_percent": 81.9,
+  "objects": [{"id": "sofa_1", "label": "sofa", "score_percent": 81.9, "views_compared": 4,
+               "per_view": [{"view": 0, "iou": 0.82, "seen_in_scan": true, "seen_in_simulation": true}]}],
+  "unmatched_scan_detections": [{"view": 5, "label": "chair", "pixels": 1200}],
+  "warnings": [], "method": "...", "cached": false
+}
+```
+Needs a labelled scan with a `world.json` (A2 and A3 first). The first call runs SAM 64 times (about $0.16) and takes a while; the result is
+saved as `score.json` and served from there until `labels.json` or `world.json` changes, or you pass `?refresh=true`.
+
+**Method.** If `world.json` is a faithful copy of the room, a detector should "see" the same things in a picture of it as in the scan.
+1. **Rebuild** the room from `world.json` alone: a floor, four walls, and each object as a box (position, size, `rotation_y`).
+   Boxes are coloured with the scan's own median colour where A2 found that object (so a misplaced object still looks like itself and is
+   penalised instead of hidden), and floor and walls from the scan's floor and wall colours.
+2. **Render** that simulated room from the same 8 cameras A2 used (positions saved in `labels.json`) and run **SAM 3.1** on each view with the same 8 prompts.
+3. **Compare** with the masks A2 saved from the scan (`views/masks.npz`). For each world object and each view where it covers at least 300 pixels, take the SAM
+   instance (of the object's label) that overlaps the object's region most, in the scan and in the simulation, and compute their overlap as
+   **IoU** = intersection / union. If only one side found it, that view scores 0. If neither found it, the view is skipped.
+4. **Per object** = mean IoU over its compared views, as a percentage. **Overall** = mean over scorable objects. Detections with confidence under 0.5 are ignored.
+5. **`unmatched_scan_detections`**: things SAM found in the scan that no object in the world accounts for (for example a sofa missing from `world.json`, or a mislabel).
+
+**How to read it.**
+- The score measures whether the box world looks the same to SAM as the real room. It is not a measurement of true sizes or positions.
+- It will never be 100% on a real scan: SAM's masks differ from run to run, and boxes cannot match a real sofa's arms or a plant's shape.
+  Read scores relatively (this world vs a layout that moved things; one object vs the rest), not as a grade. In our offline test, with a fake SAM that drops 10% of pixels at random,
+  a faithful world scores about 82%, the same world with one object 1.2 m out of place drops that object to 0%, and a deleted object shows up as unmatched.
+- Thin or small objects (rugs, doors) are judged on few pixels and are noisy. An object that neither run detects is not scored.
+- The simulation is only as good as its colours: a scan without colour gives a warning.
+
+## Deployment
+`Dockerfile` + `render.yaml` run the server on Render (see `docs/deployment.md` for options, steps and risks).
+Settings: `MODEL_API_KEY` (secret, set in the host's dashboard only), `ALLOWED_ORIGINS` (web app address(es), comma-separated; CORS allows only these),
+optional `SCANS_DIR` (where scans are stored; default `server/scans`). The host's disk is temporary on the free plan, so scans do not survive a restart.
 
 ## Costs (from dev.meta.ai pricing, 2026-11-01)
-SAM 3.1: $2.50 per 1,000 images; one A2 run is 64 requests (8 views x 8 prompts) = about $0.16.
+SAM 3.1: $2.50 per 1,000 images; one A2 run is 64 requests (8 views x 8 prompts) = about $0.16, and so is each `/score`.
 Muse Image: $0.01 per generated image (one `/render` call = one image).
 Muse Spark 1.3 (standard): $1.25 / $4.25 per million input / output tokens. Voice Transcribe: $0.18 per hour of audio.
 We use **standard mode**, not `-contributor`, because contributor mode lets Meta train on our data.
