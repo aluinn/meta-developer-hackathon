@@ -84,6 +84,14 @@ reason per change. See `docs/architecture.md` for the exact response.
 
 Offline tests (no key, no API calls): `python scripts/test_layout_synthetic.py`, `python scripts/test_transcribe_synthetic.py`
 
+## Before/after images and the character (A5)
+
+`POST /render` (multipart: `scan_id`, `photo`, `old_world`, `new_world`) asks `muse-image-1.0` to move only the objects that
+changed between the two worlds, and returns `before_url` / `after_url` plus a `changed_fraction` sanity check. Costs $0.01 per call.
+`python scripts/make_character.py` generates the original character from `docs/character-prompt.md` into `web/public/assets/`.
+
+Offline test (no key): `python scripts/test_render_synthetic.py`
+
 ## Secrets
 
 Never put API keys in code. Copy `../.env.example` to `.env` (in `server/` or the repo root), fill in your own

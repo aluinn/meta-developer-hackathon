@@ -14,6 +14,14 @@ Add a new entry at the TOP after each work session. Copy the template.
 
 ---
 
+## 2026-11-01 - Aluinn (A5)
+- What I did: `POST /render` (`photo_render.py`, `labelling/muse_image.py`): takes a room photo plus old and new world.json, works out which objects moved, describes each move in plain words anchored on nearby objects, and calls Muse Image `POST /v1/images/edits` (JSON `images` array, `size` = photo aspect, png) to move only those. Saves `render/before.png` and `after.png`, served by `GET /render/{scan_id}/before|after`. Adds `changed_fraction` / `likely_changed_too_much` (the cookbook says to check unchanged areas still match). Also `scripts/make_character.py` and `docs/character-prompt.md` for the original character (white background keyed out, since Muse Image ignores transparency).
+- What worked / what didn't: offline test passes (exact request fields, prompt wording, 503 retry, 502 without leaking the key, only-moves validation, bad photos, key-out of the white background). Reading the generated prompt showed "touching" was used for a 15 cm gap; fixed. NOT done: running on real photos (none on this Mac, no API key) and the character image itself (needs the key), so `web/public/assets/character.png` does not exist yet. Real Muse Image behaviour (does it move the right object? does it leave the rest alone?) is unknown until a real run.
+- AI tools used (and for what): Claude Code, to read the Meta docs and write the code and tests.
+- Next: MODEL_API_KEY, then run `make_character.py`, look at the result, and try `/render` on a real photo. Then A6.
+
+---
+
 ## 2026-11-01 - Aluinn (A4)
 - What I did: `POST /transcribe` (`transcribe.py`): accepts browser audio, converts any 16-bit PCM WAV to mono 16 kHz in Python (Meta accepts only WAV), calls `POST https://api.meta.ai/v1/asr/transcribe` with `muse-voice-transcribe-1.0`. `POST /layout` (`layout.py`, `labelling/layout.py`): Muse Spark proposes x/z (+ optional quarter turn) for movable objects; code rejects non-movable ids, objects outside the room, and overlaps with any non-passable object; one retry with the problems as feedback, else 422; returns a schema-valid world.json, a reason per change and a spawn-to-goal walkability flag. Wrote `docs/architecture.md`.
 - What worked / what didn't: offline tests pass (`test_layout_synthetic.py`: 3 goals + 8 rejection cases; `test_transcribe_synthetic.py`: audio conversion and the exact Meta request format). The "model" in the layout test is a scripted stand-in I wrote, so it tests our checks, not Muse Spark's judgement. NOT tested: real Muse Spark/Voice calls (no API key). Found and fixed a bug in my own `shared/example_world.json`: the bookshelf's `rotation_y` of 1.5708 turned it sideways through the east wall; now 0. Browsers do not record WAV, and there is no ffmpeg on this Mac, so webm/ogg/mp4 audio gets a 415 until Zac encodes WAV in the browser or the server host has ffmpeg.
