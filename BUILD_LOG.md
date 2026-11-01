@@ -14,6 +14,14 @@ Add a new entry at the TOP after each work session. Copy the template.
 
 ---
 
+## 2026-11-01 - Zac (Z1)
+- What I did: built the app shell in `web/`. Three screens in one page (Upload, Loading, Results) switched without reloading. "Use example room" loads `shared/example_world.json`, shows Loading for about 1 second, then Results with the object count. Choosing a file only shows its name and size (nothing is uploaded). Results has an empty area for the 3D view (Z2) and Play / Layout tabs that only change which one looks selected. Files: `world.ts` (hand-written World type + checker + loader), `screens.ts`, `format.ts`, `main.ts`, `style.css`, `vite.config.ts` (lets the dev server read `/shared`). No new libraries.
+- What worked / what didn't: `npx tsc --noEmit` and `npm run build` pass; the dev server serves the page and the shared file. Not yet clicked through by hand on laptop or iPhone (to do).
+- AI tools used (and for what): Claude Code, to write the code and explain each step.
+- Next: Z2 (3D viewer that loads world.json).
+
+---
+
 ## 2026-11-01 - Aluinn (A2)
 - What I did: built the labelling pipeline in `server/labelling/`. Renders 8 virtual camera views of the simplified mesh (keeps each camera's position/orientation), calls SAM 3.1 per view per prompt (`POST https://api.meta.ai/v1/responses`, model `sam-3.1`), projects masks onto 3D triangles using a per-pixel triangle-id image, votes one label per surface across views, groups surfaces into objects with metre bounding boxes. Endpoint: `POST /scan/{scan_id}/label`. Output: `labels.json`. Also `scripts/make_label_image.py` and `scripts/test_labelling_synthetic.py`.
 - What worked / what didn't: offline test on a fake living room with a fake SAM (finds objects by colour, plus a wrong label in one view and a false patch in another) passes: 6/6 objects, centres exact, the wrong "bed" label rejected. See `docs/a2_synthetic_result.png`. NOT tested: the real SAM call (no API key yet) and a real scan (none found on disk). The Muse Spark fallback was not built; projection works by construction, so the fallback is only needed if real SAM output misbehaves. Bug found on the way: colour copying silently fell back to grey; fixed, and `labels.json` now records `colour_source`.
