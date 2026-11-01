@@ -47,6 +47,14 @@ export function createViewer(container: HTMLElement, initialWorld: World): Viewe
   const blockGesture = (e: Event) => e.preventDefault()
   container.addEventListener('gesturestart', blockGesture)
 
+  // If you haven't moved the camera yourself, re-fit the room when the screen shape changes
+  // (e.g. rotating the phone). Once you've started orbiting, we leave your view alone.
+  let currentWorld = initialWorld
+  let userMovedCamera = false
+  controls.addEventListener('start', () => {
+    userMovedCamera = true
+  })
+
   function resize(): void {
     const width = container.clientWidth
     const height = container.clientHeight
@@ -54,21 +62,39 @@ export function createViewer(container: HTMLElement, initialWorld: World): Viewe
     renderer.setSize(width, height, false) // false: our CSS sets the canvas size
     camera.aspect = width / height
     camera.updateProjectionMatrix()
+    if (!userMovedCamera) frameRoom(currentWorld)
   }
 
-  /** Point the camera at the whole room from a raised corner, close enough to fill the view. */
+  /** Point the camera at the whole room from a raised corner, pulled back until every corner is on screen. */
   function frameRoom(world: World): void {
     const { min, max } = world.room.bounds
     const box = new THREE.Box3(new THREE.Vector3(...min), new THREE.Vector3(...max))
     const centre = box.getCenter(new THREE.Vector3())
     const radius = box.getSize(new THREE.Vector3()).length() / 2
+    const direction = new THREE.Vector3(0.55, 0.75, 1).normalize()
 
-    // Use whichever field of view is narrower (tall phone screens are narrow sideways).
-    const vFov = THREE.MathUtils.degToRad(camera.fov)
-    const hFov = 2 * Math.atan(Math.tan(vFov / 2) * camera.aspect)
-    const distance = (radius / Math.sin(Math.min(vFov, hFov) / 2)) * 0.8
+    const corners: THREE.Vector3[] = []
+    for (const x of [min[0], max[0]]) {
+      for (const y of [min[1], max[1]]) {
+        for (const z of [min[2], max[2]]) corners.push(new THREE.Vector3(x, y, z))
+      }
+    }
+    const allOnScreen = (): boolean =>
+      corners.every((c) => {
+        const p = c.clone().project(camera) // -1..1 across the screen
+        return Math.abs(p.x) < 0.9 && Math.abs(p.y) < 0.9
+      })
 
-    camera.position.copy(centre).addScaledVector(new THREE.Vector3(0.55, 0.75, 1).normalize(), distance)
+    // Start close and step back 8% at a time. Works for wide laptop windows and tall phones alike.
+    let distance = radius * 0.5
+    for (let i = 0; i < 80; i++) {
+      camera.position.copy(centre).addScaledVector(direction, distance)
+      camera.lookAt(centre)
+      camera.updateMatrixWorld()
+      if (allOnScreen()) break
+      distance *= 1.08
+    }
+
     controls.target.copy(centre)
     controls.minDistance = 0.5
     controls.maxDistance = distance * 3
@@ -76,6 +102,8 @@ export function createViewer(container: HTMLElement, initialWorld: World): Viewe
   }
 
   function setWorld(world: World): void {
+    currentWorld = world
+    userMovedCamera = false
     disposeChildren(roomLayer)
     roomLayer.add(buildRoom(world))
     frameRoom(world)
