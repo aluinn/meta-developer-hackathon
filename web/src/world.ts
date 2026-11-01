@@ -102,3 +102,9 @@ export async function loadExampleWorld(): Promise<World> {
   const { default: raw } = await import('../../shared/example_world.json?raw')
   return parseWorld(JSON.parse(raw))
 }
+
+/** Load web/src/test_world.json: the example with one object moved and one added (for testing). */
+export async function loadTestWorld(): Promise<World> {
+  const { default: raw } = await import('./test_world.json?raw')
+  return parseWorld(JSON.parse(raw))
+}

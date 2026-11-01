@@ -2,6 +2,7 @@
 // Only one screen is visible at a time; the page never reloads.
 
 import { formatSize } from './format.ts'
+import { buildLegend } from './legend.ts'
 
 export type ScreenName = 'upload' | 'loading' | 'results'
 export type TabName = 'play' | 'layout'
@@ -9,6 +10,8 @@ export type TabName = 'play' | 'layout'
 export interface ScreenHandlers {
   onFileChosen: (file: File) => void
   onUseExample: () => void
+  /** Only passed in development builds; adds a "Use test room" button. */
+  onUseTestRoom?: () => void
   onStartOver: () => void
 }
 
@@ -18,6 +21,8 @@ export interface Screens {
   showError: (message: string) => void
   setStatus: (message: string) => void
   setResultsSummary: (title: string, detail: string) => void
+  /** The empty box on the Results screen that the 3D viewer draws into. */
+  viewContainer: HTMLElement
 }
 
 /** Small helper: make an element with a class and text (text is never treated as HTML). */
@@ -65,6 +70,12 @@ function buildUpload(h: ScreenHandlers) {
   example.addEventListener('click', h.onUseExample)
 
   section.append(title, intro, input, pick, fileInfo, error, or, example)
+  if (h.onUseTestRoom) {
+    const test = el('button', 'btn btn-small', 'Use test room (dev only)')
+    test.type = 'button'
+    test.addEventListener('click', h.onUseTestRoom)
+    section.append(test)
+  }
   return { section, title, fileInfo, error }
 }
 
@@ -95,10 +106,10 @@ function buildResults(h: ScreenHandlers) {
   titles.append(heading, detail)
   header.append(titles, startOver)
 
-  // Z2 will put the 3D view inside this area.
+  // The 3D viewer (viewer.ts) puts its canvas in here; the legend floats on top.
   const view = el('div', 'view-area')
   view.id = 'view-area'
-  view.append(el('p', undefined, '3D view goes here'))
+  view.append(buildLegend())
 
   // Tabs only change which one looks selected for now; they do nothing else yet.
   const tabs = el('div', 'tabbar')
@@ -119,7 +130,7 @@ function buildResults(h: ScreenHandlers) {
   tabButtons.get('layout')?.setAttribute('aria-selected', 'false')
 
   section.append(header, view, tabs)
-  return { section, heading, detail }
+  return { section, heading, detail, view }
 }
 
 export function createScreens(root: HTMLElement, handlers: ScreenHandlers): Screens {
@@ -152,6 +163,7 @@ export function createScreens(root: HTMLElement, handlers: ScreenHandlers): Scre
     setStatus: (message) => {
       loading.status.textContent = message
     },
+    viewContainer: results.view,
     setResultsSummary: (title, detail) => {
       results.heading.textContent = title
       results.detail.textContent = detail
