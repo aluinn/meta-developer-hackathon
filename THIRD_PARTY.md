@@ -21,6 +21,7 @@ Check the licence of anything new BEFORE adding it, then list it here.
 | meta-sam-parser | server (decodes SAM 3.1 masks) | SAM License (Meta's own: free to use, copy and modify; keep the licence with any redistribution; no reverse engineering) |
 | python-dotenv | server (reads .env) | BSD-3-Clause |
 | scipy | server (nearest-vertex colour lookup, connected components) | BSD-3-Clause |
+| httpx | server (test client for the offline tests; also used by openai) | BSD-3-Clause |
 | pillow | server (PNG encoding, result image) | MIT-CMU (permissive) |
 
 All art, models, sounds and text in this repo must be original or clearly

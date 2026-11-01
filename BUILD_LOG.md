@@ -14,6 +14,14 @@ Add a new entry at the TOP after each work session. Copy the template.
 
 ---
 
+## 2026-11-01 - Aluinn (A3)
+- What I did: `labelling/roles.py` asks Muse Spark (`muse-spark-1.3`, Responses API, `input_image` parts, `text.format` json_schema) for a role + confidence per object, shown the 8 views with the A2 boxes drawn on and tagged with ids. `labelling/world.py` builds world.json (room bounds and floor_y from the mesh, spawn and goal on free floor, farthest walkable cell from spawn) and validates it against `shared/world.schema.json`. Endpoints: `POST /scan/{scan_id}/world`, `GET /world/{scan_id}`. Script: `scripts/make_world.py`.
+- What worked / what didn't: offline test passes (fake Muse Spark with an invalid role, a missing object and confidence 1.4: fallbacks and clamping work, output validates, spawn/goal are on free floor and 3m+ apart, GET works, path traversal rejected). NOT tested: the real Muse Spark call (no API key). `shared/real_world_01.json` NOT created: no real scan has been labelled yet; fabricating one would mislead Zac.
+- AI tools used (and for what): Claude Code, to read the Meta docs and write the code.
+- Next: add MODEL_API_KEY, run upload -> label -> world on a real scan, save with `--out ../shared/real_world_01.json`, commit. Then A4.
+
+---
+
 ## 2026-11-01 - Aluinn (A2)
 - What I did: built the labelling pipeline in `server/labelling/`. Renders 8 virtual camera views of the simplified mesh (keeps each camera's position/orientation), calls SAM 3.1 per view per prompt (`POST https://api.meta.ai/v1/responses`, model `sam-3.1`), projects masks onto 3D triangles using a per-pixel triangle-id image, votes one label per surface across views, groups surfaces into objects with metre bounding boxes. Endpoint: `POST /scan/{scan_id}/label`. Output: `labels.json`. Also `scripts/make_label_image.py` and `scripts/test_labelling_synthetic.py`.
 - What worked / what didn't: offline test on a fake living room with a fake SAM (finds objects by colour, plus a wrong label in one view and a false patch in another) passes: 6/6 objects, centres exact, the wrong "bed" label rejected. See `docs/a2_synthetic_result.png`. NOT tested: the real SAM call (no API key yet) and a real scan (none found on disk). The Muse Spark fallback was not built; projection works by construction, so the fallback is only needed if real SAM output misbehaves. Bug found on the way: colour copying silently fell back to grey; fixed, and `labels.json` now records `colour_source`.

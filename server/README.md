@@ -54,6 +54,24 @@ Test the geometry and voting offline (no API calls, no key needed):
 
     python scripts/test_labelling_synthetic.py
 
+## Make a world.json (A3)
+
+After labelling, `POST /scan/{scan_id}/world` shows the labelled views to Muse Spark
+(`muse-spark-1.3`), which gives each object a role (fixed / movable / climbable / passable)
+and a confidence. The server writes `scans/<scan_id>/world.json`, checked against
+`shared/world.schema.json`, and `GET /world/{scan_id}` returns it. Role reasons are
+saved in `roles_detail.json`.
+
+    python scripts/make_world.py <scan_id>
+    python scripts/make_world.py <scan_id> --out ../shared/real_world_01.json
+
+Offline test (no API calls): `python scripts/test_world_synthetic.py`
+
+Notes: `rotation_y` is always 0 for now (A2 boxes are axis-aligned). An object's
+`confidence` is the lower of A2's label confidence and Muse Spark's role confidence.
+If the model gives no valid role for an object, a default for its label is used at
+confidence 0.3 (see `roles_detail.json`, `"source": "fallback"`).
+
 ## Secrets
 
 Never put API keys in code. Copy `../.env.example` to `.env` (in `server/` or the repo root), fill in your own
