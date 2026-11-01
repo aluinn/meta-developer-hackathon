@@ -1,3 +1,13 @@
 fastapi>=0.115
 uvicorn[standard]>=0.30
 jsonschema>=4.22
+numpy>=2.0
+trimesh>=4.4
+fast-simplification>=0.1.9
+python-multipart>=0.0.9
+requests>=2.31
+openai>=1.50
+meta-sam-parser>=0.1.0
+python-dotenv>=1.0
+scipy>=1.11
+pillow>=10.0

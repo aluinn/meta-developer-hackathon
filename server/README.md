@@ -29,7 +29,32 @@ Activate it again each time you open a new terminal.
 Then open http://localhost:8000/health. You should see `{"status":"ok"}`.
 Auto-generated docs: http://localhost:8000/docs
 
+## Upload a scan (A1)
+
+`POST /scan` takes a `.glb` or `.obj` file (max 100MB), saves it under `server/scans/`
+(git-ignored), simplifies it to about 50,000 triangles and returns
+`{"scan_id", "triangles_before", "triangles_after"}`.
+
+With the server running, in a second terminal (venv active):
+
+    python scripts/upload_test.py path/to/room.glb
+    python scripts/upload_test.py --make-test-mesh     # no scan handy? uses a generated sphere
+
+## Label a scan (A2)
+
+Needs `MODEL_API_KEY` in `.env` (see below). `POST /scan/{scan_id}/label` renders the
+simplified mesh from 8 virtual cameras, asks SAM 3.1 for sofa, bookshelf, table, chair,
+rug, door, bed and desk in each view, projects the masks onto the 3D surface, votes
+for one label per surface and writes `scans/<scan_id>/labels.json` (objects with
+bounding boxes in metres, plus every camera's position and orientation).
+
+    python scripts/make_label_image.py scans/<scan_id>   # draws the result: labels_overview.png
+
+Test the geometry and voting offline (no API calls, no key needed):
+
+    python scripts/test_labelling_synthetic.py
+
 ## Secrets
 
-Never put API keys in code. Copy `../.env.example` to `../.env`, fill in your own
+Never put API keys in code. Copy `../.env.example` to `.env` (in `server/` or the repo root), fill in your own
 values, and read them with `os.environ`. `.env` is git-ignored.
