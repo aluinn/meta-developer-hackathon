@@ -80,21 +80,23 @@ function buildObject(obj: WorldObject): THREE.Group {
 function buildMarker(at: Vec3, look: Look, shape: 'ball' | 'cone'): THREE.Group {
   const group = new THREE.Group()
   group.name = look.name.toLowerCase()
-  const material = new THREE.MeshStandardMaterial({ color: look.color })
+  // Always drawn on top, so furniture can never hide where to start or where to go.
+  const material = new THREE.MeshStandardMaterial({ color: look.color, depthTest: false, depthWrite: false })
 
   const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.03, 32), material)
   disc.position.y = 0.015
-  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.0, 12), material)
-  pole.position.y = 0.5
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.6, 12), material)
+  pole.position.y = 0.8
   const top =
     shape === 'ball'
       ? new THREE.Mesh(new THREE.SphereGeometry(0.14, 24, 16), material)
       : new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.4, 24), material)
-  top.position.y = shape === 'ball' ? 1.1 : 1.2
+  top.position.y = shape === 'ball' ? 1.7 : 1.8
 
   const label = createLabelSprite(look.name)
-  label.position.y = 1.6
+  label.position.y = 2.3
 
+  for (const part of [disc, pole, top]) part.renderOrder = 5
   group.add(disc, pole, top, label)
   group.position.fromArray(at)
   return group
