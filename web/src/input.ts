@@ -6,6 +6,10 @@ export interface Input {
   move: () => { x: number; y: number }
   /** True once per Jump press (key or button). */
   takeJump: () => boolean
+  /** True while Jump is held down (to fly up when you have Wings). */
+  jumpHeld: () => boolean
+  /** True once per press of the Use Item key (E or Shift). */
+  takeUse: () => boolean
   /** How far the view was dragged since the last call, in screen pixels. */
   takeLook: () => { dx: number; dy: number }
   dispose: () => void
@@ -17,6 +21,7 @@ const KEYS = {
   left: ['KeyA', 'ArrowLeft'],
   right: ['KeyD', 'ArrowRight'],
   jump: ['Space'],
+  use: ['KeyE', 'ShiftLeft', 'ShiftRight'],
 }
 const GAME_KEYS = new Set(Object.values(KEYS).flat())
 const STICK_DEADZONE = 0.15
@@ -42,6 +47,8 @@ export function createInput(lookArea: HTMLElement, hud: HTMLElement): Input {
   }
 
   let jumpQueued = false
+  let useQueued = false
+  let jumpButtonHeld = false
   let lookDx = 0
   let lookDy = 0
   const stick = { x: 0, y: 0 }
@@ -52,6 +59,7 @@ export function createInput(lookArea: HTMLElement, hud: HTMLElement): Input {
     if (!GAME_KEYS.has(e.code)) return
     e.preventDefault() // stop arrows and Space scrolling the page
     if (KEYS.jump.includes(e.code) && !e.repeat) jumpQueued = true
+    if (KEYS.use.includes(e.code) && !e.repeat) useQueued = true
     down.add(e.code)
   })
   listen(window, 'keyup', (e) => down.delete(e.code))
@@ -141,7 +149,14 @@ export function createInput(lookArea: HTMLElement, hud: HTMLElement): Input {
     listen(jump, 'pointerdown', (e) => {
       e.preventDefault()
       jumpQueued = true
+      jumpButtonHeld = true
     })
+    const releaseJump = () => {
+      jumpButtonHeld = false
+    }
+    listen(jump, 'pointerup', releaseJump)
+    listen(jump, 'pointercancel', releaseJump)
+    listen(jump, 'pointerleave', releaseJump)
   }
 
   return {
@@ -156,6 +171,12 @@ export function createInput(lookArea: HTMLElement, hud: HTMLElement): Input {
       const j = jumpQueued
       jumpQueued = false
       return j
+    },
+    jumpHeld: () => jumpButtonHeld || held(KEYS.jump),
+    takeUse: () => {
+      const u = useQueued
+      useQueued = false
+      return u
     },
     takeLook: () => {
       const d = { dx: lookDx, dy: lookDy }
