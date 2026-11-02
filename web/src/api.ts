@@ -19,7 +19,8 @@ export class ApiError extends Error {
 
 const FAKE_TRANSCRIPT = 'Move the coffee table next to the sofa so a wheelchair can get through'
 
-const NOT_REACHED = "Couldn't reach the server. Is it running? You can still type your goal instead."
+const NOT_REACHED =
+  "Couldn't reach the server. Is it running? (If it was asleep, try again in a minute.) You can still type your goal instead."
 
 /** Turn a /transcribe error code into a sentence for a person. Codes are from Aluinn's contract. */
 export function transcribeErrorMessage(status: number): string {
@@ -34,9 +35,6 @@ export function transcribeErrorMessage(status: number): string {
       return 'The voice service had a problem. Try again in a moment, or type your goal instead.'
     case 503:
       return "Voice isn't set up on the server yet, so type your goal instead."
-    case 500: // Vite's dev proxy answers 500 when nothing is listening on port 8000
-    case 504:
-      return NOT_REACHED
     default:
       return `Something went wrong talking to the server (error ${status}). Type your goal instead.`
   }
@@ -63,7 +61,15 @@ export async function transcribe(wav: Blob): Promise<string> {
   } catch {
     throw new ApiError(0, NOT_REACHED) // no network, or the server is down
   }
-  if (!response.ok) throw new ApiError(response.status, transcribeErrorMessage(response.status))
+  if (!response.ok) {
+    // Aluinn's server always explains an error in a JSON body like {"detail": "..."}. A server error
+    // WITHOUT that is not from his code: the Vite proxy (nothing listening on port 8000) or a host that is
+    // asleep or restarting. Say "can't reach it" rather than blame the voice service.
+    const body: unknown = await response.json().catch(() => null)
+    const fromServer = typeof body === 'object' && body !== null && 'detail' in body
+    const message = !fromServer && response.status >= 500 ? NOT_REACHED : transcribeErrorMessage(response.status)
+    throw new ApiError(response.status, message)
+  }
 
   // A good answer looks like {"transcript": "...", "duration_ms": 1234}. duration_ms can be null.
   const data: unknown = await response.json().catch(() => null)
