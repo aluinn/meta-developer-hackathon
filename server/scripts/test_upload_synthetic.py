@@ -54,6 +54,13 @@ def main() -> None:
             failures.append("the compact original.glb should not be bigger than the upload")
         if r.json()["triangles_before"] != r.json()["triangles_after"]:
             failures.append("a small mesh should not be simplified")
+        # the website fetches the scan itself to show the real room
+        mesh = client.get(f"/scan/{r.json()['scan_id']}/mesh")
+        print(f"  GET /scan/<id>/mesh -> HTTP {mesh.status_code}, {mesh.headers.get('content-type')}, {len(mesh.content)} bytes")
+        if mesh.status_code != 200 or mesh.headers.get("content-type") != "model/gltf-binary" or mesh.content != (d / "original.glb").read_bytes():
+            failures.append("GET /scan/{id}/mesh should return original.glb as model/gltf-binary")
+        if client.get(f"/scan/{'12' * 16}/mesh").status_code != 404 or client.get("/scan/not-hex/mesh").status_code != 400:
+            failures.append("mesh of an unknown scan should be 404 and a bad id 400")
 
     # 2. an .obj is converted: original.glb exists and original.obj is gone
     obj = trimesh.creation.icosphere(subdivisions=3).export(file_type="obj")

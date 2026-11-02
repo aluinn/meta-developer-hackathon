@@ -1,6 +1,7 @@
 import './style.css'
 import { checkScanFile, processScan } from './api.ts'
 import type { PlayMode } from './play.ts'
+import { scanMeshUrl } from './scanMesh.ts'
 import { createScreens } from './screens.ts'
 import { createViewer, type Viewer } from './viewer.ts'
 import { loadExampleWorld, loadTestWorld, type World } from './world.ts'
@@ -32,7 +33,16 @@ function closeAll(): void {
 
 function showViewer(): void {
   closeAll()
-  if (world) viewer = createViewer(screens.viewContainer, world)
+  if (!world) return
+  const mine = createViewer(screens.viewContainer, world)
+  viewer = mine
+  // A world made from an uploaded scan comes with the scanned room itself: show it under the boxes. The boxes alone are the fallback.
+  const scanUrl = scanMeshUrl(world)
+  if (scanUrl) {
+    mine.loadScanMesh(scanUrl).catch(() => {
+      if (viewer === mine) screens.setViewMessage("The scan picture couldn't be loaded, so you're seeing simple boxes.")
+    })
+  }
 }
 
 async function enterPlay(): Promise<void> {
