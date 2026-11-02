@@ -3,7 +3,7 @@
 
 import * as THREE from 'three'
 import { disposeChildren } from './dispose.ts'
-import { buildRoom } from './roomScene.ts'
+import { buildRoom, setBoxStyle, type BoxStyle } from './roomScene.ts'
 import type { World } from './world.ts'
 
 export interface Stage {
@@ -15,6 +15,8 @@ export interface Stage {
   scanLayer: THREE.Group
   /** Draw this world's room (floor, walls, boxes, labels, markers), replacing the old one. */
   setRoom: (world: World) => void
+  /** Draw the boxes solid, as faint overlays (the scan picture is showing), or not at all. Remembered across setRoom. */
+  setBoxStyle: (style: BoxStyle) => void
   /** Run `fn` after every resize (window resize, phone rotation). */
   onResize: (fn: () => void) => void
   /** Call `update(seconds since last frame)` every frame, then draw. Pass null to stop. */
@@ -43,6 +45,7 @@ export function createStage(container: HTMLElement): Stage {
   scene.add(scanLayer, roomLayer)
 
   const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 200)
+  let boxStyle: BoxStyle = 'boxes'
 
   // Stop Safari treating a two-finger pinch on the view as a page zoom.
   const blockGesture = (e: Event) => e.preventDefault()
@@ -86,6 +89,11 @@ export function createStage(container: HTMLElement): Stage {
     setRoom: (world) => {
       disposeChildren(roomLayer)
       roomLayer.add(buildRoom(world))
+      setBoxStyle(roomLayer, boxStyle)
+    },
+    setBoxStyle: (style) => {
+      boxStyle = style
+      setBoxStyle(roomLayer, style)
     },
     onResize: (fn) => {
       resizeListeners.push(fn)

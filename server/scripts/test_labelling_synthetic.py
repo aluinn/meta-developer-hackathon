@@ -90,6 +90,26 @@ class FakeSam:
         return out
 
 
+def test_patch_merging() -> list[str]:
+    """Real scans are patchy: one object can arrive as several disconnected patches. Close ones must merge, far ones must not."""
+    import numpy as np
+    from labelling.vote import group_objects
+
+    def patch(x):
+        box = trimesh.creation.box(extents=[0.3, 0.3, 0.3]).subdivide_to_size(0.05)
+        box.apply_translation([x, 0, 0])
+        return box
+
+    problems = []
+    for name, xs, expected in (("two overlapping patches", [0.0, 0.2], 1), ("two patches 2 m apart", [0.0, 2.0], 2), ("three in a chain", [0.0, 0.2, 0.4], 1)):
+        mesh = trimesh.util.concatenate([patch(x) for x in xs])
+        found = group_objects(mesh, np.zeros(len(mesh.faces), dtype=int), np.ones(len(mesh.faces)), ["toilet"])
+        print(f"  merge test, {name}: {len(found)} object(s)")
+        if len(found) != expected:
+            problems.append(f"{name}: expected {expected} object(s), got {len(found)}")
+    return problems
+
+
 def main() -> None:
     scan_dir = Path(tempfile.mkdtemp(prefix="a2test_")) / "scan"
     scan_dir.mkdir()
@@ -101,7 +121,7 @@ def main() -> None:
     result = asyncio.run(label_scan(scan_dir, FakeSam(), labeller_name="fake-colour-sam"))
 
     print(f"{len(result['objects'])} objects found")
-    failures = []
+    failures = test_patch_merging()
     found = {o["label"]: o for o in result["objects"]}
     for name, (centre, size, _) in FURNITURE.items():
         obj = found.get(name)

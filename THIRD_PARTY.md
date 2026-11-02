@@ -21,10 +21,17 @@ Check the licence of anything new BEFORE adding it, then list it here.
 | meta-sam-parser | server (decodes SAM 3.1 masks) | SAM License (Meta's own: free to use, copy and modify; keep the licence with any redistribution; no reverse engineering) |
 | python-dotenv | server (reads .env) | BSD-3-Clause |
 | scipy | server (nearest-vertex colour lookup, connected components) | BSD-3-Clause |
+| httpx2 | server (pulled in by openai; used by FastAPI's test client in the offline tests) | BSD-3-Clause |
 | pillow | server (PNG encoding, result image) | MIT-CMU (permissive) |
 
 All art, models, sounds and text in this repo must be original or clearly
 licensed for reuse. Note any exception, with its source and licence, below.
 
+Optional external tool (not bundled, not installed by us): **ffmpeg**, used by `/transcribe` to convert WebM/Ogg/MP4
+audio to WAV if it is installed on the server host. ffmpeg is LGPL or GPL depending on the build; check this before
+shipping it in a container.
+
 ## Assets
-_None yet._
+- `web/public/assets/character.png` (generated 2026-11-02): original character made with Meta's `muse-image-1.0` from the prompt in
+  `docs/character-prompt.md`. No existing character, brand or third-party artwork is used. Check Meta's terms for generated
+  images before submission.

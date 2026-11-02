@@ -273,7 +273,7 @@ p:focus {
 
 .tabbar {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr); /* Play, Layout, Character */
   gap: 0.5rem;
   padding: 0.35rem;
   background: var(--panel);
@@ -313,7 +313,7 @@ p:focus {
 
   .tabbar {
     align-self: center;
-    width: 22rem;
+    width: 28rem;
   }
 }
 
@@ -341,7 +341,7 @@ p:focus {
 
   .tabbar {
     align-self: center;
-    width: 16rem;
+    width: 21rem;
     padding: 0.2rem;
   }
 
@@ -742,3 +742,242 @@ p:focus {
     margin: 0.4rem 0;
   }
 }
+
+/* ---- Character panel ---- */
+
+.character-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(10, 12, 20, 0.55);
+}
+
+.character-panel {
+  width: min(24rem, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.25rem;
+  border-radius: 1rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  text-align: center;
+}
+
+.character-panel h2 {
+  margin: 0;
+}
+
+.character-preview {
+  align-self: center;
+  width: min(11rem, 60%);
+  aspect-ratio: 1;
+  object-fit: contain;
+  border-radius: 0.75rem;
+  background: var(--bg);
+}
+
+.character-hint {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.character-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.7rem 0.8rem;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+}
+
+.character-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.character-status {
+  margin: 0;
+  min-height: 1.3em;
+  font-size: 0.9rem;
+}
+
+/* ---- The race (checkpoints, items, flag) ---- */
+
+.race-info {
+  position: absolute;
+  top: calc(var(--edge-top) + 2.9rem);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(20, 24, 34, 0.75);
+  color: #67e8f9;
+  font-weight: 600;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.race-info.flag {
+  color: #facc15;
+}
+
+.hud-timer.urgent {
+  background: #b42318;
+  animation: race-pulse 0.6s ease-in-out infinite alternate;
+}
+
+.race-effects {
+  position: absolute;
+  top: calc(var(--edge-top) + 3rem);
+  left: var(--edge-left);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: flex-start;
+}
+
+.chip {
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  color: #0f172a;
+  font-weight: 700;
+  font-size: 0.8rem;
+  background: #e2e8f0;
+}
+
+.chip-boost { background: #fb923c; }
+.chip-spring { background: #4ade80; }
+.chip-wings { background: #f8fafc; }
+.chip-shield { background: #67e8f9; }
+.chip-freeze { background: #93c5fd; }
+
+.race-banner {
+  position: absolute;
+  top: calc(var(--edge-top) + 5.2rem);
+  left: 50%;
+  transform: translate(-50%, -0.4rem);
+  max-width: 90%;
+  padding: 0.5rem 1rem;
+  border-radius: 0.8rem;
+  background: rgba(20, 24, 34, 0.88);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 1.05rem;
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none;
+}
+
+.race-banner.show { opacity: 1; transform: translate(-50%, 0); }
+.race-banner.good { color: #86efac; }
+.race-banner.bad { color: #fca5a5; }
+
+.race-countdown {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 5rem;
+  font-weight: 800;
+  color: #ffffff;
+  text-shadow: 0 3px 12px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+.race-countdown.pop { animation: race-pop 0.7s ease-out; }
+
+.item-btn {
+  position: absolute;
+  right: calc(var(--edge-right) + 7.2rem);
+  bottom: calc(var(--edge-bottom) + 1.5rem);
+  width: 5rem;
+  height: 5rem;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  background: rgba(30, 41, 59, 0.85);
+  color: #cbd5e1;
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.72rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  touch-action: none;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.item-btn.has-item { background: #fbbf24; color: #1b1f2a; border-color: #ffffff; animation: race-pulse 0.8s ease-in-out infinite alternate; }
+.item-btn[data-item='boost'] { background: #fb923c; }
+.item-btn[data-item='spring'] { background: #4ade80; }
+.item-btn[data-item='wings'] { background: #f8fafc; }
+.item-btn[data-item='shield'] { background: #67e8f9; }
+.item-btn[data-item='freeze'] { background: #93c5fd; }
+.item-btn:active { transform: scale(0.94); }
+.item-key { font-size: 0.65rem; opacity: 0.7; border: 1px solid currentColor; border-radius: 0.3rem; padding: 0 0.3rem; }
+
+.race-end {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(21rem, 88%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1.5rem;
+  border-radius: 1rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  text-align: center;
+  pointer-events: auto;
+}
+
+.race-end h2 { margin: 0; font-size: 1.7rem; }
+.race-end-line { margin: 0; color: var(--muted); }
+
+@keyframes race-pop { from { transform: translate(-50%, -50%) scale(1.8); opacity: 0.2; } to { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
+@keyframes race-pulse { from { transform: translateX(-50%) scale(1); } to { transform: translateX(-50%) scale(1.06); } }
+.item-btn.has-item { animation-name: race-pulse-item; }
+@keyframes race-pulse-item { from { transform: scale(1); } to { transform: scale(1.08); } }
+
+@media (max-height: 500px) {
+  .item-btn { right: calc(var(--edge-right) + 6.2rem); width: 4.2rem; height: 4.2rem; }
+  .race-countdown { font-size: 3.5rem; }
+}
+
+/* ---- Lives ---- */
+
+.race-lives {
+  position: absolute;
+  top: calc(var(--edge-top) + 0.4rem);
+  right: var(--edge-right);
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(20, 24, 34, 0.75);
+  color: #f87171;
+  font-size: 1.25rem;
+  letter-spacing: 0.15rem;
+  line-height: 1.2;
+}
+
+.race-lives.hurt { animation: race-shake 0.4s; }
+.chip-heart { background: #fca5a5; }
+.item-btn[data-item='heart'] { background: #fca5a5; }
+
+@keyframes race-shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }

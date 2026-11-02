@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "source_scan": "three_links_bathroom.glb",
+  "room": {
+    "bounds": {
+      "min": [
+        -0.903,
+        -1.174,
+        -1.092
+      ],
+      "max": [
+        0.903,
+        1.174,
+        1.092
+      ]
+    },
+    "floor_y": -1.153
+  },
+  "objects": [
+    {
+      "id": "toilet_1",
+      "label": "toilet",
+      "role": "fixed",
+      "confidence": 0.935,
+      "position": [
+        0.401,
+        -0.645,
+        0.692
+      ],
+      "size": [
+        0.439,
+        1.014,
+        0.737
+      ],
+      "rotation_y": 0.0
+    },
+    {
+      "id": "sink_1",
+      "label": "sink",
+      "role": "fixed",
+      "confidence": 0.93,
+      "position": [
+        -0.484,
+        -0.333,
+        0.84
+      ],
+      "size": [
+        0.527,
+        0.396,
+        0.442
+      ],
+      "rotation_y": 0.0
+    }
+  ],
+  "spawn": [
+    -0.603,
+    -1.153,
+    -0.792
+  ],
+  "goal": [
+    0.597,
+    -1.153,
+    0.008
+  ]
+}

@@ -5,7 +5,7 @@ import { formatSize } from './format.ts'
 import { buildLegend } from './legend.ts'
 
 export type ScreenName = 'upload' | 'loading' | 'results'
-export type TabName = 'play' | 'layout'
+export type TabName = 'play' | 'layout' | 'character'
 
 export interface ScreenHandlers {
   onFileChosen: (file: File) => void
@@ -15,6 +15,7 @@ export interface ScreenHandlers {
   onStartOver: () => void
   onPlay: () => void
   onLayout: () => void
+  onCharacter: () => void
 }
 
 export interface Screens {
@@ -60,7 +61,7 @@ function buildUpload(h: ScreenHandlers) {
   input.type = 'file'
   input.id = 'scan-file'
   input.className = 'visually-hidden'
-  input.accept = '.glb,.obj,.usdz'
+  input.accept = '.glb,.obj'
   const pick = el('label', 'btn btn-primary', 'Choose a scan file')
   pick.htmlFor = 'scan-file'
 
@@ -143,6 +144,7 @@ function buildResults(h: ScreenHandlers) {
   tabs.append(
     makeTab('play', 'Play', h.onPlay),
     makeTab('layout', 'Layout', h.onLayout),
+    makeTab('character', 'Character', h.onCharacter),
   )
 
   section.append(header, view, layoutBox, tabs)

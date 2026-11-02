@@ -3,8 +3,6 @@
     python scripts/make_label_image.py scans/<scan_id>
 Writes scans/<scan_id>/labels_overview.png
 """
-import hashlib
-import itertools
 import json
 import sys
 from pathlib import Path
@@ -13,21 +11,8 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from labelling.annotate import colour_for, draw_boxes  # noqa: E402
 from labelling.render import IMAGE_HEIGHT, IMAGE_WIDTH  # noqa: E402
-
-
-def colour_for(label: str) -> tuple[int, int, int]:
-    h = hashlib.md5(label.encode()).digest()
-    return (80 + h[0] % 176, 80 + h[1] % 176, 80 + h[2] % 176)
-
-
-def project(point, cam):
-    rel = np.array(point) - np.array(cam["position"])
-    xc, yc, zc = rel @ cam["right"], rel @ cam["up"], rel @ cam["forward"]
-    if zc <= 0.05:
-        return None
-    focal = (IMAGE_WIDTH / 2) / np.tan(np.radians(cam["fov_degrees"]) / 2)
-    return IMAGE_WIDTH / 2 + focal * xc / zc, IMAGE_HEIGHT / 2 - focal * yc / zc
 
 
 def main(scan_dir: Path) -> None:
@@ -36,19 +21,8 @@ def main(scan_dir: Path) -> None:
     tiles = []
     for cam in cams:
         img = Image.open(scan_dir / "views" / f"view_{cam['view']}.png").convert("RGB")
+        draw_boxes(img, cam, data["objects"])
         draw = ImageDraw.Draw(img)
-        for obj in data["objects"]:
-            lo, hi = obj["bbox"]["min"], obj["bbox"]["max"]
-            corners = [(x, y, z) for x, y, z in itertools.product(*zip(lo, hi))]
-            pts = [project(c, cam) for c in corners]
-            colour = colour_for(obj["label"])
-            for i, j in itertools.combinations(range(8), 2):
-                if sum(a != b for a, b in zip(corners[i], corners[j])) == 1 and pts[i] and pts[j]:
-                    draw.line([pts[i], pts[j]], fill=colour, width=2)
-            visible = [p for p in pts if p]
-            if visible:
-                x, y = min(p[0] for p in visible), min(p[1] for p in visible)
-                draw.text((max(x, 2), max(y - 11, 2)), obj["label"], fill=colour)
         draw.text((4, 4), f"view {cam['view']}", fill=(0, 0, 0))
         tiles.append(img)
 

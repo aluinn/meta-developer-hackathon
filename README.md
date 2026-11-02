@@ -61,6 +61,13 @@ To try on your phone (same Wi-Fi): `npm run dev -- --host`, then open the "Netwo
 
 Open http://localhost:8000/health - you should see `{"status":"ok"}`.
 
+## Run everything as one server (like the deployed site)
+
+    cd web && npm run build
+    cd ../server && source .venv/bin/activate && uvicorn main:app --port 8000
+
+Open http://localhost:8000: the website, with the API at the same address (`/docs` for the API test page).
+
 ## Working together
 Read [CONTRIBUTING.md](CONTRIBUTING.md). Log sessions in [BUILD_LOG.md](BUILD_LOG.md).
 Third-party licences: [THIRD_PARTY.md](THIRD_PARTY.md).

@@ -3,13 +3,14 @@
 
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import { loadScanMesh as loadScan } from './scanMesh.ts'
 import { createStage } from './stage.ts'
 import type { World } from './world.ts'
 
 export interface Viewer {
   /** Replace the room being shown. The old one is freed and the camera is re-aimed. */
   setWorld: (world: World) => void
-  /** HOOK for later: load the scan mesh (.glb) to sit underneath the boxes. Not built yet. */
+  /** Load the scanned room (.glb) into the scan layer and turn the boxes into faint overlays on top of it. */
   loadScanMesh: (url: string) => Promise<void>
   /** Stop everything and free the graphics memory. Call this when leaving the screen. */
   dispose: () => void
@@ -82,12 +83,17 @@ export function createViewer(container: HTMLElement, initialWorld: World): Viewe
   setWorld(initialWorld)
   stage.setLoop(() => controls.update()) // update() gives the smooth "glide" after you let go
 
+  let disposed = false
   return {
     setWorld,
-    loadScanMesh: async (_url: string): Promise<void> => {
-      // TODO (later task): load a .glb with GLTFLoader and add it to `stage.scanLayer`.
+    loadScanMesh: async (url: string): Promise<void> => {
+      const mesh = await loadScan(url)
+      if (disposed) return // you left the screen while it was downloading
+      stage.scanLayer.add(mesh)
+      stage.setBoxStyle('overlay')
     },
     dispose: () => {
+      disposed = true
       controls.dispose()
       stage.dispose()
     },

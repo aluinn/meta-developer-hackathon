@@ -1,7 +1,10 @@
 import './style.css'
 import { setLayoutGoal } from './layoutGoal.ts'
 import { createLayoutPanel, type LayoutPanel } from './layoutPanel.ts'
+import { checkScanFile, processScan } from './api.ts'
+import { openCharacterPanel } from './characterPanel.ts'
 import type { PlayMode } from './play.ts'
+import { scanMeshUrl } from './scanMesh.ts'
 import { createScreens } from './screens.ts'
 import { createViewer, type Viewer } from './viewer.ts'
 import { loadExampleWorld, loadTestWorld, type World } from './world.ts'
@@ -39,7 +42,16 @@ function closeAll(): void {
 
 function showViewer(): void {
   closeAll()
-  if (world) viewer = createViewer(screens.viewContainer, world)
+  if (!world) return
+  const mine = createViewer(screens.viewContainer, world)
+  viewer = mine
+  // A world made from an uploaded scan comes with the scanned room itself: show it under the boxes. The boxes alone are the fallback.
+  const scanUrl = scanMeshUrl(world)
+  if (scanUrl) {
+    mine.loadScanMesh(scanUrl).catch(() => {
+      if (viewer === mine) screens.setViewMessage("The scan picture couldn't be loaded, so you're seeing simple boxes.")
+    })
+  }
 }
 
 /** The Layout tab opens the panel; pressing it again closes it. The 3D view stays underneath. */
@@ -97,8 +109,16 @@ async function openWorld(title: string, load: () => Promise<World>): Promise<voi
 }
 
 const screens = createScreens(root, {
-  // A real file: just show its name and size. Nothing is uploaded yet.
-  onFileChosen: (file) => screens.showFile(file),
+  // A real scan: send it to the server (upload, find furniture, work out roles) and show the world it comes back with.
+  onFileChosen: (file) => {
+    try {
+      checkScanFile(file) // wrong type, too big or empty: say so straight away
+    } catch (err) {
+      screens.showError(err instanceof Error ? err.message : String(err))
+      return
+    }
+    void openWorld(file.name.replace(/\.[^.]+$/, ''), () => processScan(file, screens.setStatus))
+  },
 
   onUseExample: () => openWorld('Example room', loadExampleWorld),
 
@@ -108,6 +128,9 @@ const screens = createScreens(root, {
   onPlay: () => void enterPlay(),
 
   onLayout: toggleLayout,
+  onCharacter: () => {
+    openCharacterPanel()
+  },
 
   onStartOver: () => {
     closeAll()

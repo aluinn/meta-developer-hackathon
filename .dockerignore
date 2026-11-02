@@ -1,0 +1,16 @@
+.git
+.env
+.env.*
+!.env.example
+docs
+web/node_modules
+web/dist
+**/node_modules
+**/.venv
+**/venv
+**/__pycache__
+server/scans
+*.glb
+*.usdz
+*.obj
+*.ply

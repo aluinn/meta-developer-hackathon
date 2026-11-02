@@ -10,9 +10,10 @@ from .render import View
 from .types import Detection
 
 MIN_VOTE = 0.3  # a face needs at least this much summed confidence for its label
-MIN_VIEWS = 2  # ...from at least this many views (or all views that can see it, if fewer)
+MIN_VIEWS = 2  # ...from at least this many views (a surface only one view can see cannot be cross-checked, so it stays unlabelled)
 MIN_FACES = 40  # ignore specks
 MIN_SIZE_M = 0.15  # ignore objects whose largest side is smaller than this
+MERGE_MARGIN_M = 0.05  # same-label patches whose boxes come within this of each other are one object
 
 
 @dataclass
@@ -68,7 +69,7 @@ def vote_faces(
     best = score.argmax(axis=1)
     best_score = score[np.arange(n_faces), best]
     best_views = views_with_label[np.arange(n_faces), best]
-    enough_views = best_views >= np.minimum(MIN_VIEWS, seen_in_views)
+    enough_views = best_views >= MIN_VIEWS
     keep = (best_score >= MIN_VOTE) & enough_views & (seen_in_views > 0)
     agreement = np.where(seen_in_views > 0, best_views / np.maximum(seen_in_views, 1), 0.0)
     return np.where(keep, best, -1), agreement
@@ -85,23 +86,40 @@ def group_objects(
     graph = coo_matrix((np.ones(len(a)), (a, b)), shape=(n, n))
     _, component = connected_components(graph, directed=False)
 
-    objects, counters = [], {}
+    # 1. one patch per connected component of same-label faces
+    patches: list[dict] = []
     for comp in np.unique(component[face_labels >= 0]):
         faces = np.nonzero((component == comp) & (face_labels >= 0))[0]
-        if len(faces) < MIN_FACES:
-            continue
         points = mesh.vertices[mesh.faces[faces].ravel()]
-        lo, hi = points.min(axis=0), points.max(axis=0)
-        if (hi - lo).max() < MIN_SIZE_M:
+        patches.append({"label": face_labels[faces[0]], "lo": points.min(axis=0), "hi": points.max(axis=0), "faces": len(faces), "agreement": float(agreement[faces].sum())})
+
+    # 2. real scan meshes are patchy, so one object often shows up as several touching or overlapping patches: merge them
+    merged = True
+    while merged:
+        merged = False
+        for i in range(len(patches)):
+            for j in range(i + 1, len(patches)):
+                a_, b_ = patches[i], patches[j]
+                if a_["label"] == b_["label"] and (a_["lo"] - MERGE_MARGIN_M <= b_["hi"]).all() and (b_["lo"] - MERGE_MARGIN_M <= a_["hi"]).all():
+                    a_.update(lo=np.minimum(a_["lo"], b_["lo"]), hi=np.maximum(a_["hi"], b_["hi"]), faces=a_["faces"] + b_["faces"], agreement=a_["agreement"] + b_["agreement"])
+                    del patches[j]
+                    merged = True
+                    break
+            if merged:
+                break
+
+    objects, counters = [], {}
+    for patch in sorted(patches, key=lambda p: -p["faces"]):
+        if patch["faces"] < MIN_FACES or (patch["hi"] - patch["lo"]).max() < MIN_SIZE_M:
             continue
-        label = labels[face_labels[faces[0]]]
+        label = labels[patch["label"]]
         counters[label] = counters.get(label, 0) + 1
         objects.append(LabelledObject(
             id=f"{label}_{counters[label]}",
             label=label,
-            confidence=float(agreement[faces].mean()),
-            bbox_min=lo.round(3).tolist(),
-            bbox_max=hi.round(3).tolist(),
-            face_count=len(faces),
+            confidence=patch["agreement"] / patch["faces"],
+            bbox_min=patch["lo"].round(3).tolist(),
+            bbox_max=patch["hi"].round(3).tolist(),
+            face_count=patch["faces"],
         ))
     return objects

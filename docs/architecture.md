@@ -1,5 +1,229 @@
 # Architecture
 
-_Placeholder. Describe how the scan becomes a world.json and how the web app uses it._
+How Room world fits together. Status as of 2026-11-02: **A1 to A6 are built.** Proven on a real scan (a small bathroom, `shared/real_world_01.json`): A1 upload, A2 SAM labelling
+(real SAM call, 29 s), A3 roles (real Muse Spark call, 8 s) and A6 `/score`. Image generation (the character) is proven too.
+**Deployed on Render** (one service for site + API). On the live server, proven for real: scan upload and simplification, `/layout` (Muse Spark moved the coffee table
+next to the sofa, accepted on the first attempt), `/transcribe` (call and stereo 48 kHz to 16 kHz conversion work; a test tone gave an empty transcript, as expected).
+**Not yet run for real:** `/render` (needs a room photo), `/transcribe` on actual speech or on WebM/Ogg/MP4 (needs ffmpeg in the image), and anything on a furniture scan.
 
-Overview: scan -> server (AI pipeline) -> `shared/world.json` -> web app (three.js + Rapier).
+## The big picture
+
+```mermaid
+flowchart LR
+    scan["iPhone LiDAR scan<br/>(.glb / .obj, external app)"] --> A1
+    subgraph server["Server (FastAPI, Python) - Aluinn"]
+        A1["A1 POST /scan<br/>simplify to ~50k triangles"] --> A2["A2 POST /scan/{id}/label<br/>render 8 views, SAM 3.1, vote"]
+        A2 --> A3["A3 POST /scan/{id}/world<br/>Muse Spark gives each object a role"]
+        A3 --> W[("world.json")]
+        W --> A4["A4 POST /layout<br/>Muse Spark proposes moves, code checks them"]
+        T["A4 POST /transcribe<br/>Muse Voice Transcribe"]
+    end
+    subgraph web["Web app (Vite, TypeScript, three.js, Rapier) - Zac"]
+        V["Z2 viewer"] --> P["Z3 play mode"]
+        V --> C["Z4 clearance check"]
+        Mic["Z5 voice input"]
+        BA["Z6 before / after"]
+    end
+    W -- "GET /world/{id}" --> V
+    Mic -- "audio" --> T
+    T -- "transcript" --> A4
+    A4 -- "new world.json + changes" --> BA
+```
+
+`shared/world.schema.json` is the handover. The server produces `world.json`; the web app only ever reads it.
+Both sides can be built in parallel because `shared/example_world.json` is a valid stand-in.
+
+## How the website uses the server
+Choosing a scan file on the Upload screen runs `web/src/api.ts` `processScan()`: `POST /scan` (multipart field `file`), then `POST /scan/{id}/process`, which **starts a background job and
+returns at once** (202), then it asks `GET /scan/{id}/status` every 2 seconds until the job is done, then `GET /world/{id}`; the world.json that comes back is
+shown by the existing viewer. The job (`server/jobs.py`) runs the labelling (A2) and then the roles (A3). Why a job: the free host is slow (labelling took about 100 s there) and hosting layers often
+cut a single request off at about 100 s; now no request lasts more than a second or so, and the Loading screen shows real progress ("Looking for furniture… 64%").
+Status is `{state: queued|running|done|error, step: rendering|labelling|roles|done, percent, error_kind: no_key|no_objects|ai_service|failed}`. Only **one job runs at a time** (the 512 MB host cannot take two);
+others wait with state `queued`. **Each job runs in its own worker process** (`server/labelling/worker.py`, started as `python -m labelling.worker process ...`; it reports progress as JSON lines on stdout) and so does the
+upload's loading/simplifying step (`worker.py prepare`). Reason: Python does not give freed memory back, so on the 512 MB host the *second* scan crashed the whole server (the first job left about 350 MB behind).
+A process that exits returns everything. If a worker is killed (out of memory) the job reports `out_of_memory`; a worker that hangs is killed after 10 minutes. Jobs live in memory, so if the server restarts the status answers 404 and the website says so. A few lost SAM questions (under a quarter) are tolerated; each AI request has a timeout (SAM 45 s, others 120 s) with 2 retries.
+Failures become plain-English messages on the Upload screen (wrong file type, over 100 MB, unreadable file, no furniture found, AI service problem, server restarted, server unreachable). The older `POST /scan/{id}/label` and `/world` endpoints still work and are used by scripts. Addresses are relative (`/scan`), so it works the same on
+the deployed site and, via the proxy in `web/vite.config.ts`, under `npm run dev`. One scan takes about 45 seconds and costs about $0.25 in Meta credits.
+**The 3D view and play mode show the real scanned room**: a world made from an upload has `source_scan` = `<scan_id>/original.glb`, so `web/src/scanMesh.ts` fetches `GET /scan/{id}/mesh` (the compact, textured scan; same coordinates as world.json) and shows it unlit, as a cutaway (front faces only, so you look into the room from above). The boxes become faint overlays with labels; in play mode they are not drawn but still do the physics. If the scan cannot be loaded, the boxes are drawn as before. The example rooms (no uploaded scan) are boxes only.
+**Play mode on a scan is a tiny character on the real scan** (`web/src/profile.ts`): the character is a flat picture 22 cm tall (the default bean, or one the player generated), runs at 1.1 m/s and jumps 55 cm, so the real room is a giant playground; the physics ground is the scan's own triangles (`scanCollider.ts` -> a Rapier trimesh), not the boxes, and the spawn/goal heights are found by a ray onto the real surface. Worlds without a scan keep Zac's person-sized play on boxes (the `human` profile, unchanged). Tested in Node with real Rapier (`web/scripts/test-tiny-play.ts`: stands on the scan floor, hops onto a 45 cm sofa, cannot reach a 1.3 m shelf, walls hold). Caveat for the Layout tab: furniture is part of the scan mesh and cannot move, so when a layout moves objects, show the boxes (the `boxes` style) or the before/after photos, not the scan.
+Not yet connected: Layout tab (`/layout`), voice (`/transcribe`), before/after (`/render`) and the score (`/score`). Test: `node web/scripts/test-api.ts`.
+
+## The principle: models propose, code checks
+
+Every Meta model call goes through our own validation before anything reaches the user or the web app:
+
+| Step | The model proposes | Our code enforces |
+|---|---|---|
+| A2 labelling | 2D masks per view | masks are projected onto the 3D mesh; a surface needs votes from 2+ views, so one wrong view is outvoted |
+| A3 roles | role + confidence per object | role must be one of the four; bad or missing answers fall back to a low-confidence default; output must validate against `world.schema.json` |
+| A4 layout | new x/z (and turn) for movable objects | only `movable` objects; inside the room; no overlap with other solid objects; one retry with the problems as feedback, then reject (422) |
+
+API keys stay on the server (`MODEL_API_KEY` in `.env`, git-ignored). The browser never sees them.
+
+## Server endpoints (`/server`)
+
+| Task | Endpoint | What it does | Needs key | Status |
+|---|---|---|---|---|
+| A1 | `POST /scan` | upload .glb/.obj (max 100MB), save, simplify, return `scan_id` + triangle counts | no | tested with generated meshes |
+| A2 | `POST /scan/{scan_id}/label` | 8 virtual cameras, SAM 3.1 per view per prompt, project masks to 3D, vote, bounding boxes | yes (`sam-3.1`) | geometry/voting tested with a fake SAM; real SAM call proven on the bathroom scan |
+| A3 | `POST /scan/{scan_id}/world` | Muse Spark assigns roles, builds and validates `world.json` | yes (`muse-spark-1.3`) | real Muse Spark call proven on the bathroom scan |
+| A2+A3 | `POST /scan/{scan_id}/process`, `GET /scan/{scan_id}/status` | the same two steps as a background job with progress (what the website uses) | yes | proven on the bathroom scan, locally (longest request 0.3 s) |
+| A1 | `GET /scan/{scan_id}/mesh` | the scan itself (compact original.glb with colours) for the website's 3D view | no | proven (local browser screenshots) |
+| A3 | `GET /world/{scan_id}` | returns the saved `world.json` | no | tested |
+| A4 | `POST /transcribe` | browser audio -> transcript | yes (`muse-voice-transcribe-1.0`) | real call proven with a WAV tone (empty transcript); real speech and WebM untested |
+| A4 | `POST /layout` | goal text + world -> new valid `world.json` + a reason per change | yes (`muse-spark-1.3`) | real model proven on the example world (first attempt accepted); validation/retry tested with a scripted stand-in |
+| A5 | `POST /character` | a player describes a character; Muse Image draws it; returns a 512 px transparent PNG | yes (`muse-image-1.0`, about $0.01 each) | real call proven (25 s); checks, limits and failures tested offline |
+| A5 | `POST /render`, `GET /render/{scan_id}/before\|after` | photo + old and new world -> before/after images (Muse Image edit, only moved objects change) | yes (`muse-image-1.0`) | request format, prompt and checks tested with a fake model; **real call untested** |
+| A6 | `GET /score/{scan_id}` | scan-versus-simulation match score (outline of each world box vs SAM's mask of the real object) | no (default method) | proven on the bathroom scan (44%); the SAM-on-render option failed on real data |
+| | `GET /health` | `{"status":"ok"}` | no | |
+
+Interactive docs while the server runs: http://localhost:8000/docs
+
+### Files kept per scan (`server/scans/<scan_id>/`, git-ignored)
+`original.*` (upload), `simplified.glb` (A1), `views/` (A2 renders and per-pixel triangle ids), `labels.json` (A2),
+`world.json` and `roles_detail.json` (A3), `layout.json` (A4, latest proposal), `render/before.png` and `render/after.png` (A5), `views/masks.npz` (every SAM mask from A2) and `score.json` (A6).
+
+## The world.json contract
+Metres, y-up. `position` is the box centre; `size` is [width x, height y, depth z] before rotation; `rotation_y` is in
+radians, **positive = anticlockwise seen from above** (identical to three.js `rotation.y`; +90 degrees sends the box's local +x to world -z and local +z to world +x; the server uses the same matrix); `spawn`/`goal` are on the floor (`y = room.floor_y`, which is **not always 0** for real scans). Roles:
+`fixed`, `movable`, `climbable`, `passable`. Details: `shared/world.schema.json`.
+
+Things the web side should expect from real (not example) files:
+- `rotation_y` is `0` for A3 output (A2 boxes are axis-aligned). A4 can add quarter turns.
+- `confidence` = the lower of "how sure A2 is of the label" and "how sure Muse Spark is of the role". About 0.3 means a fallback guess.
+- Sizes and positions are estimates from phone LiDAR. A planning aid, not a safety assessment.
+
+## A4 contracts (Zac builds Z4, Z5 and Z6 against these)
+
+**`POST /transcribe`** (Z5): multipart form with one file field named `audio`. Returns `{"transcript": "...", "duration_ms": 1234}`.
+- Meta accepts **only WAV** (mono 16-bit PCM, 16 or 24 kHz, max 10 min / 32MB). Browsers record WebM/Ogg/MP4, not WAV.
+- The server converts any 16-bit PCM WAV (any rate, mono or stereo) itself. For WebM/Ogg/MP4 it needs `ffmpeg` installed on the server host, otherwise it returns **415**.
+- So the safest plan for Z5: encode WAV in the browser (e.g. record with Web Audio and write PCM samples), or we install ffmpeg wherever the server is deployed (A6).
+
+**`POST /layout`** (Z4, Z6): JSON body
+`{"scan_id": "<32 hex chars>", "goal": "put the table next to the sofa", "world": {...optional current world.json...}}`.
+If `world` is omitted, the scan's saved `world.json` is used. Returns:
+```json
+{
+  "scan_id": "...", "goal": "...",
+  "world": { "...a complete, schema-valid world.json with the moves applied..." },
+  "changes": [{"id": "table_1", "label": "table", "from": {"position": [..], "rotation_y": 0}, "to": {"position": [..], "rotation_y": 0}, "reason": "..."}],
+  "notes": "anything the model could not do",
+  "attempts": 1,
+  "spawn_to_goal_walkable": {"before": true, "after": true}
+}
+```
+- Only `movable` objects move. Nothing can be added or removed, so "add a desk" returns no changes plus an explanation in `notes`. The room data also has no windows.
+- Errors: 422 if the model's proposal was rejected twice (body lists the problems; nothing changed) or the world is invalid; 503 if the server has no API key.
+- `spawn_to_goal_walkable` is a rough 0.6 m-wide-person check on a 10 cm grid (`null` = could not tell). It is informational. Z4's clearance check is the real one.
+
+## A5: before/after images and the character
+
+**`POST /render`** (Z6): multipart form with `scan_id`, `photo` (JPEG/PNG/WebP of the room, max 15MB, shrunk to 1024 px),
+`old_world` and `new_world` (both as JSON text; `new_world` is `/layout`'s `world`). The server works out which objects moved,
+describes each move in plain words anchored on other objects (not coordinates, because Muse Image only sees the photo),
+and asks `muse-image-1.0` (`POST /v1/images/edits`) to move only those and keep everything else. Returns:
+```json
+{
+  "scan_id": "...", "before_url": "/render/<scan_id>/before", "after_url": "/render/<scan_id>/after",
+  "moved": [{"id": "table_1", "label": "coffee table", "from": [..], "to": [..]}],
+  "changed_fraction": 0.01, "likely_changed_too_much": false,
+  "prompt": "the exact instruction sent to Muse Image"
+}
+```
+- `before_url` / `after_url` are PNGs served by `GET /render/{scan_id}/before|after`.
+- `changed_fraction` is a rough check of how much of the photo differs. If `likely_changed_too_much` is true, the model probably altered more than the moved objects: show a warning or re-run (results vary each time). `null` means the images could not be compared.
+- The photo should show the moved objects and where they will go. If the new spot is out of frame, Muse Image cannot draw it.
+- Only moves are supported: 422 if objects were added, removed or resized, or nothing moved. 415 for an unreadable photo (HEIC is not supported). 502 if Muse Image fails.
+
+**Character image** (Z3): `server/scripts/make_character.py` generates an original character from the prompt in
+`docs/character-prompt.md` and saves it to `web/public/assets/character.png` (white background removed). See that doc for status.
+
+## The race (play mode)
+Play mode is a race, generated from the scan, inspired by arcade racers (original shapes and names). Pass **4 checkpoint gates** in order (each adds 8 s) before the **countdown clock** runs out, avoid **rolling spiky hazards** (a hit stuns you
+1 s and costs 3 s; jump over them), grab **item boxes** for power-ups, then **catch the moving flag 3 times**: it wanders while locked, then flees (with a speed burst when you get close, and a short rest every few seconds), reappears far away after each catch,
+and comes back 10% faster. Power-ups (one held at a time, used with E / Shift / the Item button): **Boost** (1.9x speed, 4 s), **Super jump** (about twice the height, 10 s), **Wings** (fly: hold Jump to rise, let go to sink, stops under the ceiling, 6 s),
+**Shield** (blocks one hit, 12 s), **Freeze** (the flag stands still 4 s). Best "seconds to spare" per scan is kept in the browser.
+How it works, in layers (each has its own Node test, no browser needed): `walkGraph.ts` + `probe.ts` find every spot the character can stand on the real scan (rays down through the room) and link spots by walking, jumping up or dropping down;
+`course.ts` plans gates (one on top of furniture whenever something can be climbed), item boxes, hazards across the route, and a flag start far from spawn and gates; `game.ts` is the rules (timer, gates, items, hazards, the flag's brain: it runs to the spot it can reach before you
+can, by walking distance); `gameScene.ts` and `gameHud.ts` draw it; `motion.ts` applies Boost/Super jump/Wings to the movement. If no course can be planned (a room too small or without ground), or the page is opened with `?classic`, it falls back to the old walk-to-the-goal game.
+Debug: `?debug` exposes `window.__rw` (the game, a teleport and the character size) for browser tests; `?colliders` and `?fps` are Zac's. Tests: `node web/scripts/test-course.ts`, `test-game.ts`, `test-tiny-play.ts`.
+**Difficulty (measured with simulated chasers that head straight for the flag):** a slow runner never catches it; a perfect normal-speed runner needs about 17 s for all 3 catches; a Boost makes that about 7 s. Real players on a thumbstick will be slower than the bot, and
+hazards and furniture get in the way, so the time limit (about 25 s + route time + 45 s) is tight but fair. Tune the numbers in `TUNING` in `game.ts`. Not tried by a human on a real phone yet.
+
+## Character maker (`POST /character`)
+The Character tab on the Results screen lets a player describe a character (3 to 80 characters, e.g. "a sleepy red panda wearing a tiny blue hat"). `web/src/api.ts` `generateCharacter()` posts it; the server (`server/characters.py`) wraps it in a fixed template
+(`server/labelling/character.py`: "an original, friendly game character: {description}. Flat 2D game-art style... plain white background... no text, no logos... must not resemble any existing character, mascot, game or brand"), asks `muse-image-1.0`
+in a worker process, removes the white background, shrinks to 512 px and returns the PNG. The browser keeps it in `localStorage` (this browser only) and play mode draws it as the character (the default bean if none).
+**Safety and cost:** the description may contain only letters, numbers and `, . ' - !` on one line; a block-list (existing characters/franchises/brands, unsafe words, "ignore/instructions/prompt") refuses obvious abuse with a 422; limits: one per 8 seconds per visitor,
+8 per visitor per hour, 40 per hour for the whole server (env `CHARACTER_PER_VISITOR_HOURLY`, `CHARACTER_GLOBAL_HOURLY`, `CHARACTER_MIN_SECONDS_BETWEEN`); it answers 503 "busy" while a scan job runs (same one-at-a-time lock). It is a simple filter, not a guarantee:
+plain words typed on one line can still reach the image model, and the visitor limit uses the proxy's `X-Forwarded-For`, which a client can fake; the server-wide hourly cap is the real protection for the credits (40 x $0.01 = $0.40 an hour at most).
+
+## A6: scan-versus-simulation score
+
+**`GET /score/{scan_id}?method=silhouette|sam_on_render&refresh=true`** (Z6 can show it on the results screen) returns how well `world.json`
+reproduces the scanned room:
+```json
+{
+  "scan_id": "...", "method_name": "silhouette", "overall_percent": 44.2,
+  "objects": [{"id": "toilet_1", "label": "toilet", "score_percent": 37.6, "views_compared": 5,
+               "per_view": [{"view": 3, "iou": 0.321, "seen_in_scan": true, "seen_in_simulation": true}]}],
+  "unmatched_scan_detections": [{"view": 0, "label": "sink", "pixels": 8780}],
+  "warnings": [], "method": "...", "cached": false
+}
+```
+Needs a labelled scan with a `world.json` (A2 and A3 first). The result is saved as `score.json` and served again until `labels.json` or `world.json`
+change, or you pass `?refresh=true` (changing the scoring code does not invalidate the cache, so refresh after code changes).
+
+**Method.** If `world.json` is a faithful copy of the room, what it draws should line up with what SAM found in the scan.
+1. **Rebuild** the room from `world.json` alone: a floor, four walls, and each object as a box (position, size, `rotation_y`). Boxes get the scan's
+   colour where A2 found that object (so a misplaced object still looks like itself), floor and walls the scan's floor and wall colours.
+2. **Render** it from the same 8 cameras A2 used (positions in `labels.json`).
+3. **Compare** with the masks A2 saved from the scan (`views/masks.npz`). For each world object and each view where it covers at least 300 pixels,
+   take the SAM mask of that label on the scan that overlaps it most and compute **IoU** = intersection / union against the object's side of the render.
+   - A view where SAM saw no object of that label in the scan is skipped (hidden or out of frame: nothing to compare against).
+   - A view where SAM saw one but nowhere near the box counts as a miss (IoU 0).
+4. **Per object** = mean IoU over its compared views, as a percentage. **Overall** = mean over scorable objects. Detections under 0.5 confidence are ignored.
+5. **`unmatched_scan_detections`**: things SAM found in the scan that no world object accounts for (for example a missing object, or a mislabel).
+
+**Two ways to get the simulation side (`method`)**
+- **`silhouette` (default, free):** the box's own outline in the render. Works on real scans.
+- **`sam_on_render` (about $0.16):** run SAM 3.1 on the render of the boxes and compare SAM's masks, as originally planned. **It does not work on a real scan:** on
+  the real bathroom every object scored 0%, because SAM did not recognise plain grey boxes as a toilet or a sink (they were found in the real scan in 5 views each).
+  The method only makes sense if the simulated render looks realistic. It is kept for completeness and for clean synthetic scenes.
+
+**How to read it.**
+- The score measures how well a box covers what SAM sees as the real object, not true sizes or positions. A box can never match a toilet exactly, so
+  **real scores are low**: the bathroom's toilet scores about 38% and its sink about 51% (stable across views, so it is a real signal, not noise).
+  Read scores relatively (this world vs a layout that moved things; one object vs the rest), not as a grade out of 100.
+- In the offline test with fake SAM masks (10% of pixels dropped at random), a faithful world scores about 85%, one object moved 1.2 m drops that object to 0%,
+  and a deleted object shows up as unmatched.
+- Thin or small objects (rugs, doors) are judged on few pixels and are noisy. An object SAM never saw in the scan cannot be scored.
+- A scan without colour gives a warning: SAM saw grey renders in A2.
+
+## Deployment
+`Dockerfile` + `render.yaml` run **one server for everything** on Render: the image builds the web app and FastAPI serves it at `/` with the API alongside
+(API routes win; see `docs/deployment.md`). The web app should call the API with relative paths (`/layout`, not `http://localhost:8000/layout`).
+Settings: `MODEL_API_KEY` (secret, set in the host's dashboard only), `ALLOWED_ORIGINS` (only needed if the web app is hosted elsewhere or during `npm run dev`; comma-separated; CORS allows only these),
+optional `SCANS_DIR` (where scans are stored; default `server/scans`). The host's disk is temporary on the free plan, so scans do not survive a restart.
+
+## Costs (from dev.meta.ai pricing, 2026-11-01)
+SAM 3.1: $2.50 per 1,000 images; one A2 run is 64 requests (8 views x 8 prompts) = about $0.16. `/score` is free by default (only `method=sam_on_render` costs the same again).
+Muse Image: $0.01 per generated image (one `/render` call = one image).
+Muse Spark 1.3 (standard): $1.25 / $4.25 per million input / output tokens. Voice Transcribe: $0.18 per hour of audio.
+We use **standard mode**, not `-contributor`, because contributor mode lets Meta train on our data.
+Credits are $150 per person; each person claims their own.
+
+## Known limits (say these in the demo)
+- **Memory:** the server host has 512 MB. Scan textures are shrunk to 2048 px on load (`labelling/meshio.py`), and the heavy work runs in short-lived worker processes (see above). Measured locally on the bathroom scan: web server about 100 to 150 MB, `prepare` worker about 260 MB, `process` worker about 300 MB (never at the same time as `prepare`), three jobs in a row with no growth. That leaves a margin of roughly 100 MB on the host, not a lot. The other endpoints (`/score`, `/render`, `/layout`, `/transcribe`, `/scan/{id}/label`) still do their work inside the web server process; wire them to the website only after checking their memory, or move them into workers too.
+- **Scan quality decides everything.** The pipeline works on a clean, closed, box-shaped room (the bathroom scan: toilet and sink found in 5 views each,
+  boxes on the right fixtures). It failed on a large open-plan room scan with a vaulted ceiling, big windows and outdoor ground in the mesh: SAM found only
+  a plant. A2's cameras are placed from the scan's bounding box, so an irregular or partly-outdoor scan puts cameras outside the room, and the renders show the
+  back of the mesh. Rescan smaller, simpler rooms, and look at `labels_overview.png` before trusting a result.
+- A2 only finds what we ask SAM to look for (`prompts` in `POST /scan/{id}/label`; default is living-room furniture). A bathroom needs `["toilet", "sink", ...]`.
+- A real scan's mesh is patchy, so A2 merges same-label patches whose boxes come within 5 cm. Two separate same-label objects touching each other would merge into one.
+- Phone LiDAR sizes are approximate; all measurements are estimates.
+- A2's boxes are axis-aligned, so rotated furniture gets a looser box.
+- SAM sees colour renders of a simplified mesh, so it may miss small or dark objects.
+- Muse Image edits are non-deterministic and may redraw more than asked or mis-place a moved object; `changed_fraction` is only a rough guard.
+- Layout proposals respect geometry only, not taste or accessibility standards.

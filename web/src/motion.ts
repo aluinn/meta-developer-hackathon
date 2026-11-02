@@ -2,7 +2,7 @@
 // No drawing or browser code here, so it can be tested on its own.
 
 import type RAPIER from '@dimforge/rapier3d-compat'
-import { FIXED_DT, type CharacterBody } from './physics.ts'
+import { CHARACTER, FIXED_DT, type CharacterBody } from './physics.ts'
 
 export const MOVE = {
   runSpeed: 4, // metres per second
@@ -10,7 +10,19 @@ export const MOVE = {
   jumpSpeed: 7, // m/s upwards, which reaches about 1.2 m: onto the sofa (0.8 m), not the bookshelf (2 m)
   coyoteTime: 0.1, // seconds you can still jump after running off an edge
   jumpBuffer: 0.12, // seconds a jump press is remembered just before you land
+  flyRise: 3, // m/s upwards while flying and holding Jump
+  flySink: 1.5, // m/s downwards while flying and not holding Jump
 }
+
+/** Things a power-up can change about this step. */
+export interface MoveModifiers {
+  jumpSpeedMult: number // Super Jump
+  flying: boolean // Wings: no gravity; hold Jump to rise, let go to sink
+  flyUp: boolean
+  /** The highest the top of the head may go while flying (just under the ceiling). Infinity = no limit. */
+  flyCeiling?: number
+}
+export const NO_MODIFIERS: MoveModifiers = { jumpSpeedMult: 1, flying: false, flyUp: false }
 
 export interface MotionState {
   verticalSpeed: number
@@ -34,14 +46,22 @@ export function stepCharacter(
   wishX: number,
   wishZ: number,
   jumpPressed: boolean,
+  mods: MoveModifiers = NO_MODIFIERS,
 ): void {
   const dt = FIXED_DT
   if (jumpPressed) state.jumpQueued = MOVE.jumpBuffer
 
-  state.verticalSpeed -= MOVE.gravity * dt
-  const canJump = state.grounded || state.sinceGrounded < MOVE.coyoteTime
+  if (mods.flying) {
+    const head = character.body.translation().y + CHARACTER.height / 2
+    const atCeiling = head >= (mods.flyCeiling ?? Infinity)
+    state.verticalSpeed = mods.flyUp && !atCeiling ? MOVE.flyRise : -MOVE.flySink // no gravity while flying
+    state.jumpQueued = 0
+  } else {
+    state.verticalSpeed -= MOVE.gravity * dt
+  }
+  const canJump = !mods.flying && (state.grounded || state.sinceGrounded < MOVE.coyoteTime)
   if (state.jumpQueued > 0 && canJump) {
-    state.verticalSpeed = MOVE.jumpSpeed
+    state.verticalSpeed = MOVE.jumpSpeed * mods.jumpSpeedMult
     state.jumpQueued = 0
     state.sinceGrounded = MOVE.coyoteTime // used up: no second jump in mid-air
   }

@@ -6,8 +6,16 @@ export interface Input {
   move: () => { x: number; y: number }
   /** True once per Jump press (key or button). */
   takeJump: () => boolean
-  /** How far the view was dragged since the last call, in screen pixels. */
+  /** True while Jump is held down (to fly up when you have Wings). */
+  jumpHeld: () => boolean
+  /** True once per press of the Use Item key (E or Shift). */
+  takeUse: () => boolean
+  /** How far the view was turned since the last call, in screen pixels (mouse moved, or view dragged). */
   takeLook: () => { dx: number; dy: number }
+  /** True while the mouse is captured and steering the view (desktop). */
+  isMouseLooking: () => boolean
+  /** Give the mouse back (so buttons can be clicked). */
+  releaseMouse: () => void
   dispose: () => void
 }
 
@@ -17,9 +25,11 @@ const KEYS = {
   left: ['KeyA', 'ArrowLeft'],
   right: ['KeyD', 'ArrowRight'],
   jump: ['Space'],
+  use: ['KeyE', 'ShiftLeft', 'ShiftRight'],
 }
 const GAME_KEYS = new Set(Object.values(KEYS).flat())
 const STICK_DEADZONE = 0.15
+const MOUSE_LOOK_SPEED = 0.7 // captured-mouse movement is scaled a little so it feels calm
 
 /** True on phones and tablets (and touch laptops): show the on-screen controls. */
 export function hasTouch(): boolean {
@@ -42,6 +52,8 @@ export function createInput(lookArea: HTMLElement, hud: HTMLElement): Input {
   }
 
   let jumpQueued = false
+  let useQueued = false
+  let jumpButtonHeld = false
   let lookDx = 0
   let lookDy = 0
   const stick = { x: 0, y: 0 }
@@ -52,6 +64,7 @@ export function createInput(lookArea: HTMLElement, hud: HTMLElement): Input {
     if (!GAME_KEYS.has(e.code)) return
     e.preventDefault() // stop arrows and Space scrolling the page
     if (KEYS.jump.includes(e.code) && !e.repeat) jumpQueued = true
+    if (KEYS.use.includes(e.code) && !e.repeat) useQueued = true
     down.add(e.code)
   })
   listen(window, 'keyup', (e) => down.delete(e.code))
@@ -62,7 +75,16 @@ export function createInput(lookArea: HTMLElement, hud: HTMLElement): Input {
   let lookPointer: number | null = null
   let lastX = 0
   let lastY = 0
+  const mouseLocked = () => document.pointerLockElement === lookArea
   listen(lookArea, 'pointerdown', (e) => {
+    // Desktop: click the view once and the mouse steers it (look up, down, left, right) until Esc.
+    if (e.pointerType === 'mouse' && !mouseLocked()) {
+      try {
+        void Promise.resolve(lookArea.requestPointerLock()).catch(() => {}) // if refused, dragging still works
+      } catch {
+        /* dragging still works */
+      }
+    }
     if (lookPointer !== null) return
     lookPointer = e.pointerId
     lastX = e.clientX
@@ -75,6 +97,11 @@ export function createInput(lookArea: HTMLElement, hud: HTMLElement): Input {
     lookDy += e.clientY - lastY
     lastX = e.clientX
     lastY = e.clientY
+  })
+  listen(lookArea, 'mousemove', (e) => {
+    if (!mouseLocked()) return
+    lookDx += e.movementX * MOUSE_LOOK_SPEED
+    lookDy += e.movementY * MOUSE_LOOK_SPEED
   })
   const endLook = (e: PointerEvent) => {
     if (e.pointerId === lookPointer) lookPointer = null
@@ -141,7 +168,14 @@ export function createInput(lookArea: HTMLElement, hud: HTMLElement): Input {
     listen(jump, 'pointerdown', (e) => {
       e.preventDefault()
       jumpQueued = true
+      jumpButtonHeld = true
     })
+    const releaseJump = () => {
+      jumpButtonHeld = false
+    }
+    listen(jump, 'pointerup', releaseJump)
+    listen(jump, 'pointercancel', releaseJump)
+    listen(jump, 'pointerleave', releaseJump)
   }
 
   return {
@@ -157,13 +191,24 @@ export function createInput(lookArea: HTMLElement, hud: HTMLElement): Input {
       jumpQueued = false
       return j
     },
+    jumpHeld: () => jumpButtonHeld || held(KEYS.jump),
+    takeUse: () => {
+      const u = useQueued
+      useQueued = false
+      return u
+    },
     takeLook: () => {
       const d = { dx: lookDx, dy: lookDy }
       lookDx = 0
       lookDy = 0
       return d
     },
+    isMouseLooking: mouseLocked,
+    releaseMouse: () => {
+      if (mouseLocked()) document.exitPointerLock()
+    },
     dispose: () => {
+      if (mouseLocked()) document.exitPointerLock()
       for (const fn of cleanups) fn()
     },
   }

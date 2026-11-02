@@ -5,15 +5,20 @@
 // slides it along walls, lands it on furniture and climbs small steps.
 
 import RAPIER from '@dimforge/rapier3d-compat'
+import type { ScanTriangles } from './scanCollider.ts'
 import type { Vec3, World } from './world.ts'
 
 /** Physics runs at exactly 60 steps a second, whatever the screen's frame rate. */
 export const FIXED_DT = 1 / 60
 
+// The numbers below are the "human" size; profile.ts overwrites them for the toy-sized character on a real scan.
 export const CHARACTER = {
   height: 1.6, // metres, feet to top of head
   radius: 0.25,
   stepHeight: 0.3, // ledges up to this high are climbed automatically (not the 0.4 m coffee table)
+  skin: 0.01, // gap kept between the character and surfaces, to avoid getting stuck
+  snapToGround: 0.2, // stay stuck to the floor when walking off drops this small
+  stepMinWidth: 0.15, // a step must be at least this deep to be climbed
 }
 
 const WALL_THICKNESS = 0.5
@@ -45,8 +50,11 @@ export interface PhysicsRoom {
   isWall: (collider: RAPIER.Collider) => boolean
 }
 
-/** A Rapier world with the floor, invisible walls and every solid object from world.json. */
-export function buildPhysicsWorld(world: World): PhysicsRoom {
+/**
+ * A Rapier world with the floor and invisible walls, plus the solid things to run on: either the real scan's triangles (the character
+ * runs on the actual scan), or, with no scan, a box for every solid object in world.json.
+ */
+export function buildPhysicsWorld(world: World, scan?: ScanTriangles): PhysicsRoom {
   const physics = new RAPIER.World({ x: 0, y: 0, z: 0 }) // we apply gravity to the character ourselves
   physics.timestep = FIXED_DT
 
@@ -76,12 +84,20 @@ export function buildPhysicsWorld(world: World): PhysicsRoom {
     walls.add(wall.handle)
   }
 
+  if (scan) {
+    // The real scan is the ground. Its furniture is part of it, so the boxes are not needed (and would block the real shapes).
+    physics.createCollider(RAPIER.ColliderDesc.trimesh(scan.vertices, scan.indices))
+    physics.step() // rays (castRay) only see colliders after the first step, so ground-finding needs this
+    return { physics, isWall: (collider) => walls.has(collider.handle) }
+  }
+
   // Furniture. Passable things (rug, door) get no collider: you walk over or through them.
   for (const obj of world.objects) {
     if (obj.role === 'passable') continue
     const [w, h, d] = obj.size
     addBox(physics, obj.position, [w / 2, h / 2, d / 2], obj.rotation_y)
   }
+  physics.step() // rays (castRay) only see colliders after the first step
   return { physics, isWall: (collider) => walls.has(collider.handle) }
 }
 
@@ -93,18 +109,18 @@ export interface CharacterBody {
 
 /** The character's capsule, standing with its feet at `feet`. */
 export function createCharacterBody(physics: RAPIER.World, feet: Vec3): CharacterBody {
-  const { height, radius, stepHeight } = CHARACTER
+  const { height, radius, stepHeight, skin, snapToGround, stepMinWidth } = CHARACTER
   const body = physics.createRigidBody(
     RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(feet[0], feet[1] + height / 2, feet[2]),
   )
   // A capsule is a cylinder with half-spheres on each end. Rapier wants half the cylinder's height.
   const collider = physics.createCollider(RAPIER.ColliderDesc.capsule(height / 2 - radius, radius), body)
 
-  const controller = physics.createCharacterController(0.01) // keep a 1 cm gap to avoid getting stuck
-  controller.enableAutostep(stepHeight, 0.15, false)
+  const controller = physics.createCharacterController(skin)
+  controller.enableAutostep(stepHeight, stepMinWidth, false)
   controller.setMaxSlopeClimbAngle((50 * Math.PI) / 180)
   controller.setMinSlopeSlideAngle((30 * Math.PI) / 180)
-  controller.enableSnapToGround(0.2) // stay stuck to the floor when walking off tiny drops
+  controller.enableSnapToGround(snapToGround)
   return { body, collider, controller }
 }
 
