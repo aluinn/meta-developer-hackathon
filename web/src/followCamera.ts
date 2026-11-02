@@ -14,7 +14,7 @@ export const CAMERA = {
   wallClearance: 0.25, // stop this far in front of whatever is behind us
   pitch: 0.35, // how high above the character the camera starts, in radians (0 = level, 1.57 = straight down)
 }
-const DRAG_SPEED = 0.005 // radians per pixel dragged
+const DRAG_SPEED = 0.004 // radians per pixel dragged
 const MIN_PITCH = -0.75 // below zero the camera sits under the character's head, so you look UP at it
 const MAX_PITCH = 1.35 // highest you can go (looking almost straight down)
 const LOOK_UP_BELOW = 0.12 // at or below this the player chose a low view, so don't lift the camera automatically

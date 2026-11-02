@@ -6,7 +6,7 @@ import { checkScanFile, processScan } from './api.ts'
 import { openCharacterPanel } from './characterPanel.ts'
 import type { PlayMode } from './play.ts'
 import { scanMeshUrl } from './scanMesh.ts'
-import { createScreens } from './screens.ts'
+import { createScreens, type Mode } from './screens.ts'
 import { createViewer, type Viewer } from './viewer.ts'
 import { loadClearanceTestWorld, loadExampleWorld, loadTestWorld, type World } from './world.ts'
 
@@ -96,8 +96,9 @@ async function enterPlay(): Promise<void> {
 }
 
 /** Upload -> Loading (about 1 second) -> Results, for any world loader. */
-async function openWorld(title: string, load: () => Promise<World>): Promise<void> {
+async function openWorld(title: string, load: () => Promise<World>, mode: Mode): Promise<void> {
   closeAll()
+  screens.setMode(mode)
   screens.setStatus(`Loading ${title.toLowerCase()}…`)
   screens.show('loading')
   try {
@@ -106,9 +107,11 @@ async function openWorld(title: string, load: () => Promise<World>): Promise<voi
     setLayoutGoal('') // a new room, so the old goal no longer applies
     const n = loaded.objects.length
     screens.setResultsSummary(title, `${n} ${n === 1 ? 'object' : 'objects'} found`)
+    screens.setWorkInfo(loaded)
     screens.show('results') // show first, so the 3D area has a real size when the viewer starts
     showViewer()
   } catch (err) {
+    delete document.body.dataset.mode
     screens.show('upload')
     screens.showError(`Could not load ${title.toLowerCase()}: ${err instanceof Error ? err.message : String(err)}`)
   }
@@ -116,21 +119,21 @@ async function openWorld(title: string, load: () => Promise<World>): Promise<voi
 
 const screens = createScreens(root, {
   // A real scan: send it to the server (upload, find furniture, work out roles) and show the world it comes back with.
-  onFileChosen: (file) => {
+  onFileChosen: (file, mode) => {
     try {
       checkScanFile(file) // wrong type, too big or empty: say so straight away
     } catch (err) {
       screens.showError(err instanceof Error ? err.message : String(err))
       return
     }
-    void openWorld(file.name.replace(/\.[^.]+$/, ''), () => processScan(file, screens.setStatus))
+    void openWorld(file.name.replace(/\.[^.]+$/, ''), () => processScan(file, screens.setStatus), mode)
   },
 
-  onUseExample: () => openWorld('Example room', loadExampleWorld),
+  onUseExample: (mode) => openWorld('Example room', loadExampleWorld, mode),
 
   // Development only: the production build leaves this out.
-  onUseTestRoom: import.meta.env.DEV ? () => openWorld('Test room', loadTestWorld) : undefined,
-  onUseGapTestRoom: import.meta.env.DEV ? () => openWorld('Narrow-gap test room', loadClearanceTestWorld) : undefined,
+  onUseTestRoom: import.meta.env.DEV ? () => openWorld('Test room', loadTestWorld, 'game') : undefined,
+  onUseGapTestRoom: import.meta.env.DEV ? () => openWorld('Narrow-gap test room', loadClearanceTestWorld, 'game') : undefined,
 
   onPlay: () => void enterPlay(),
 
@@ -141,6 +144,7 @@ const screens = createScreens(root, {
 
   onStartOver: () => {
     closeAll()
+    delete document.body.dataset.mode
     screens.show('upload')
   },
 })

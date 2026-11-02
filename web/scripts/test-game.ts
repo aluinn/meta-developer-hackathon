@@ -154,7 +154,7 @@ startRunning(game)
 events = game.update(DT, [game.hazards[0].pos[0], game.hazards[0].def.radius * 2 + 0.02, game.hazards[0].pos[2]])
 check(kinds(events, 'hit').length === 0, 'you can jump over a hazard')
 
-// ---- 6b. lives and falling ----
+// ---- 6b. lives (falling never costs one) ----
 game = makeGame()
 startRunning(game)
 check(game.lives === 3, 'you start with 3 lives')
@@ -166,25 +166,9 @@ for (let i = 0; i < 3; i++) {
 check(game.lives === 0 && game.phase === 'lost' && events.some((e) => e.type === 'lose' && e.reason === 'lives'), 'three hits and you are out of lives')
 game = makeGame()
 startRunning(game)
-events = game.landed(UNIT * TUNING.fallLimit * 0.8)
-check(events.length === 0 && game.lives === 3, 'a small drop is fine')
-events = game.landed(UNIT * TUNING.fallLimit * 1.2)
-check(kinds(events, 'fall').length === 1 && game.lives === 2, 'a long drop costs a life')
-game.give('shield')
-game.useItem()
-game.invulnerable = 0
-events = game.landed(UNIT * 5)
-check(events.some((e) => e.type === 'fall' && e.blocked) && game.lives === 2 && game.effects.shield === 0, 'a shield breaks one fall')
-game.give('wings')
-game.useItem()
-game.invulnerable = 0
-events = game.landed(UNIT * 5)
-check(events.length === 0 && game.lives === 2, 'wings stop falls from hurting')
 game = makeGame()
 startRunning(game)
 check(kinds((game.give('heart'), game.useItem()), 'livesFull').length === 1 && game.held === 'heart', 'an extra life is kept when you are on full lives')
-events = game.fellOut()
-check(game.lives === 2, 'falling out of the world costs a life')
 
 // ---- 7. the flag ----
 game = makeGame()
