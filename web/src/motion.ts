@@ -12,6 +12,10 @@ export const MOVE = {
   jumpBuffer: 0.12, // seconds a jump press is remembered just before you land
   flyRise: 3, // m/s upwards while flying and holding Jump
   flySink: 1.5, // m/s downwards while flying and not holding Jump
+  // Speeding up and slowing down take a moment instead of snapping (these are multiples of runSpeed, per second).
+  groundAccel: 11, // about 0.09 s to full speed on the ground
+  groundBrake: 15, // stopping is a little quicker than starting, so you can stop on a ledge
+  airAccel: 6, // still steerable in the air, but not as sharply
 }
 
 /** Things a power-up can change about this step. */
@@ -29,10 +33,12 @@ export interface MotionState {
   grounded: boolean
   sinceGrounded: number // seconds since we last touched the ground
   jumpQueued: number // seconds left on a remembered jump press
+  vx: number // current horizontal speed, which eases towards the wanted speed
+  vz: number
 }
 
 export function newMotionState(): MotionState {
-  return { verticalSpeed: 0, grounded: false, sinceGrounded: 0, jumpQueued: 0 }
+  return { verticalSpeed: 0, grounded: false, sinceGrounded: 0, jumpQueued: 0, vx: 0, vz: 0 }
 }
 
 /**
@@ -67,8 +73,24 @@ export function stepCharacter(
   }
   state.jumpQueued = Math.max(0, state.jumpQueued - dt)
 
+  // Ease the real speed towards the wanted speed (smooth starts and stops, softer steering in the air).
+  const wishLength = Math.hypot(wishX, wishZ)
+  const braking = wishLength < Math.hypot(state.vx, state.vz)
+  const accel = (state.grounded ? (braking ? MOVE.groundBrake : MOVE.groundAccel) : MOVE.airAccel) * MOVE.runSpeed
+  const dvx = wishX - state.vx
+  const dvz = wishZ - state.vz
+  const dv = Math.hypot(dvx, dvz)
+  const maxDv = accel * dt
+  if (dv <= maxDv) {
+    state.vx = wishX
+    state.vz = wishZ
+  } else {
+    state.vx += (dvx / dv) * maxDv
+    state.vz += (dvz / dv) * maxDv
+  }
+
   // Ask Rapier how far we can really go (it stops us at walls and lifts us onto small steps).
-  const wanted = { x: wishX * dt, y: state.verticalSpeed * dt, z: wishZ * dt }
+  const wanted = { x: state.vx * dt, y: state.verticalSpeed * dt, z: state.vz * dt }
   character.controller.computeColliderMovement(character.collider, wanted)
   const moved = character.controller.computedMovement()
   state.grounded = character.controller.computedGrounded()
@@ -79,6 +101,9 @@ export function stepCharacter(
   } else {
     state.sinceGrounded += dt
   }
+  // Ran into a wall: lose that speed too, so you don't keep pushing against it.
+  if (Math.abs(moved.x) < Math.abs(wanted.x) * 0.5) state.vx = 0
+  if (Math.abs(moved.z) < Math.abs(wanted.z) * 0.5) state.vz = 0
   // Bumped our head on something while going up: start falling.
   if (state.verticalSpeed > 0 && moved.y < wanted.y * 0.5) state.verticalSpeed = 0
 

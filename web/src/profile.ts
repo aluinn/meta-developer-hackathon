@@ -34,7 +34,7 @@ const GRAVITY_TINY = 14
 export const PROFILES: Record<ProfileName, Profile> = {
   human: {
     character: { height: 1.6, radius: 0.25, stepHeight: 0.3, skin: 0.01, snapToGround: 0.2, stepMinWidth: 0.15 },
-    move: { runSpeed: 4, gravity: 20, jumpSpeed: 7, coyoteTime: 0.1, jumpBuffer: 0.12, flyRise: 3, flySink: 1.5 },
+    move: { runSpeed: 4, gravity: 20, jumpSpeed: 7, coyoteTime: 0.1, jumpBuffer: 0.12, flyRise: 3, flySink: 1.5, groundAccel: 11, groundBrake: 15, airAccel: 6 },
     camera: { distance: 4, minDistance: 0.6, headHeight: 1.4, enoughRoom: 2.5, wallClearance: 0.25, pitch: 0.35 },
     goalRadius: 0.5,
     goalHeightSlack: 1,
@@ -45,8 +45,8 @@ export const PROFILES: Record<ProfileName, Profile> = {
   },
   tiny: {
     character: { height: 0.15, radius: 0.035, stepHeight: 0.025, skin: 0.003, snapToGround: 0.03, stepMinWidth: 0.02 },
-    move: { runSpeed: 1.1, gravity: GRAVITY_TINY, jumpSpeed: Math.sqrt(2 * GRAVITY_TINY * JUMP_HEIGHT_TINY), coyoteTime: 0.1, jumpBuffer: 0.12, flyRise: 0.9, flySink: 0.4 },
-    camera: { distance: 1.6, minDistance: 0.25, headHeight: 0.07, enoughRoom: 0.9, wallClearance: 0.05, pitch: 0.55 }, // far enough back to show how big the room is
+    move: { runSpeed: 1.1, gravity: GRAVITY_TINY, jumpSpeed: Math.sqrt(2 * GRAVITY_TINY * JUMP_HEIGHT_TINY), coyoteTime: 0.1, jumpBuffer: 0.12, flyRise: 0.9, flySink: 0.4, groundAccel: 11, groundBrake: 15, airAccel: 6 },
+    camera: { distance: 1.6, minDistance: 0.25, headHeight: 0.07, enoughRoom: 0.9, wallClearance: 0.05, pitch: 0.7 }, // far enough back to show how big the room is
     goalRadius: 0.22,
     goalHeightSlack: 0.5,
     markerScale: 0.35,
