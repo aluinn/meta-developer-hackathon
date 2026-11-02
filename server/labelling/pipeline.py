@@ -2,10 +2,12 @@
 import asyncio
 import io
 import json
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
 import trimesh
+from openai import OpenAIError
 from PIL import Image
 
 from .meshio import load_mesh
@@ -54,13 +56,36 @@ def load_masks(scan_dir: Path) -> list[Detection]:
     return detections
 
 
-async def label_scan(scan_dir: Path, segmenter: Segmenter, labeller_name: str, prompts: list[str] = PROMPTS) -> dict:
+MAX_FAILED_SHARE = 0.25  # give up if more than this share of the SAM questions fail
+ProgressCallback = Callable[[str, int, int], None]  # (step, done, total); steps: "rendering", "labelling"
+
+
+async def label_scan(
+    scan_dir: Path, segmenter: Segmenter, labeller_name: str, prompts: list[str] = PROMPTS, on_step: ProgressCallback | None = None
+) -> dict:
+    report = on_step or (lambda step, done, total: None)
+    report("rendering", 0, 1)
     mesh, views, colour_source = await asyncio.to_thread(render_views, scan_dir)
+    report("rendering", 1, 1)
     png_by_view = {v.index: _png(v.rgb) for v in views}
 
-    results = await asyncio.gather(*(
-        segmenter.segment(v.index, png_by_view[v.index], prompt) for v in views for prompt in prompts
-    ))
+    total, finished, failed = len(views) * len(prompts), 0, []
+    report("labelling", 0, total)
+
+    async def ask(view_index: int, prompt: str) -> list[Detection]:
+        nonlocal finished
+        try:
+            found = await segmenter.segment(view_index, png_by_view[view_index], prompt)
+        except (OpenAIError, asyncio.TimeoutError) as exc:  # the client already retried; one lost question should not lose the scan
+            failed.append(exc)
+            found = []
+        finished += 1
+        report("labelling", finished, total)
+        return found
+
+    results = await asyncio.gather(*(ask(v.index, prompt) for v in views for prompt in prompts))
+    if len(failed) > MAX_FAILED_SHARE * total:  # that many lost means the service is really down
+        raise failed[-1]
     detections: list[Detection] = [d for group in results for d in group]
 
     face_labels, agreement = vote_faces(mesh, views, detections, prompts)

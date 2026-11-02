@@ -5,16 +5,27 @@ import { parseWorld, type World } from './world.ts'
 
 const MAX_SCAN_BYTES = 100 * 1024 * 1024 // the server's limit
 const SCAN_EXTENSIONS = ['.glb', '.obj']
-const STEP_TIMEOUT_MS = 5 * 60 * 1000 // the labelling step takes about a minute; a sleeping free server takes about a minute more to wake
+const STEP_TIMEOUT_MS = 5 * 60 * 1000 // for one request: an upload, or waking a sleeping free server (about a minute)
+const POLL_TIMEOUT_MS = 30 * 1000
+const MAX_PROCESS_MS = 10 * 60 * 1000 // give up on a job after this long
+const MAX_POLL_FAILURES = 5 // in a row; a single dropped request is fine
+let pollIntervalMs = 2000
 
 let apiBase = ''
+/** For tests only: how often to ask the server for progress. */
+export function setPollInterval(ms: number): void {
+  pollIntervalMs = ms
+}
 /** For tests only: where the server is, when the page is not served by it. */
 export function setApiBase(base: string): void {
   apiBase = base.replace(/\/$/, '')
 }
 
 /** An error whose message is already written for the person using the app. */
-export class ApiError extends Error {}
+export class ApiError extends Error {
+  /** The HTTP status when the server answered with an error. */
+  status?: number
+}
 
 /** Turn a failed response into a plain-English message. */
 async function explain(res: Response): Promise<string> {
@@ -44,12 +55,16 @@ async function explain(res: Response): Promise<string> {
   return detail || `The server returned an error (${res.status}).`
 }
 
-async function request(path: string, init: RequestInit = {}): Promise<Response> {
+async function request(path: string, init: RequestInit = {}, timeoutMs = STEP_TIMEOUT_MS): Promise<Response> {
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), STEP_TIMEOUT_MS)
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
     const res = await fetch(apiBase + path, { ...init, signal: controller.signal })
-    if (!res.ok) throw new ApiError(await explain(res))
+    if (!res.ok) {
+      const error = new ApiError(await explain(res))
+      error.status = res.status
+      throw error
+    }
     return res
   } catch (err) {
     if (err instanceof ApiError) throw err
@@ -70,9 +85,67 @@ export function checkScanFile(file: { name: string; size: number }): void {
   if (file.size === 0) throw new ApiError('That file is empty.')
 }
 
+interface JobStatus {
+  state: 'queued' | 'running' | 'done' | 'error'
+  step: string
+  percent: number
+  error_kind: string | null
+}
+
+function progressMessage(status: JobStatus): string {
+  if (status.state === 'queued') return 'Waiting for the server…'
+  if (status.step === 'rendering') return 'Preparing your scan…'
+  if (status.step === 'labelling') return `Looking for furniture… ${status.percent}%`
+  if (status.step === 'roles') return 'Working out what each thing is…'
+  return 'Working…'
+}
+
+function jobError(kind: string | null): ApiError {
+  switch (kind) {
+    case 'no_key':
+      return new ApiError('The server is not set up to use the AI service yet (no API key).')
+    case 'no_objects':
+      return new ApiError("We couldn't find any furniture we recognise in this scan. A clearer scan of a smaller room works best.")
+    case 'ai_service':
+      return new ApiError('The AI service had a problem. Please try again in a moment.')
+    default:
+      return new ApiError('Something went wrong while processing your scan. Please try again.')
+  }
+}
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
+/** Ask the server how the background job is doing, every couple of seconds, until it finishes or fails. */
+async function waitForJob(scanId: string, onStatus: (message: string) => void): Promise<void> {
+  const started = Date.now()
+  let failuresInARow = 0
+  let lastMessage = ''
+  for (;;) {
+    if (Date.now() - started > MAX_PROCESS_MS) throw new ApiError('This is taking too long. Please try again.')
+    let status: JobStatus
+    try {
+      status = (await (await request(`/scan/${scanId}/status`, {}, POLL_TIMEOUT_MS)).json()) as JobStatus
+      failuresInARow = 0
+    } catch (err) {
+      // 404 = the server forgot the job, which means it restarted (the free plan restarts after being idle).
+      if (err instanceof ApiError && err.status === 404) {
+        throw new ApiError('The server restarted while working on your scan (the free plan does this when idle). Please try again.')
+      }
+      if (++failuresInARow >= MAX_POLL_FAILURES) throw err
+      await sleep(pollIntervalMs)
+      continue
+    }
+    if (status.state === 'error') throw jobError(status.error_kind)
+    if (status.state === 'done') return
+    const message = progressMessage(status)
+    if (message !== lastMessage) onStatus((lastMessage = message))
+    await sleep(pollIntervalMs)
+  }
+}
+
 /**
- * The whole trip: upload the scan, find the furniture, work out what each thing does, and fetch the finished world.json.
- * `onStatus` is called with a short message before each step (shown on the Loading screen).
+ * The whole trip: upload the scan, start the background job (find the furniture, work out what each thing does), follow its
+ * progress, and fetch the finished world.json. `onStatus` is called with a short message whenever the step changes (shown on the Loading screen).
  */
 export async function processScan(file: File, onStatus: (message: string) => void): Promise<World> {
   checkScanFile(file)
@@ -84,11 +157,9 @@ export async function processScan(file: File, onStatus: (message: string) => voi
   const scanId = uploaded.scan_id
   if (!scanId) throw new ApiError('The server did not accept the scan.')
 
-  onStatus('Looking for furniture… this takes about a minute')
-  await request(`/scan/${scanId}/label`, { method: 'POST' })
-
-  onStatus('Working out what each thing is…')
-  await request(`/scan/${scanId}/world`, { method: 'POST' })
+  // This returns at once; the work happens on the server in the background, so no single request has to last a minute or two.
+  await request(`/scan/${scanId}/process`, { method: 'POST' })
+  await waitForJob(scanId, onStatus)
 
   onStatus('Building your room…')
   const world = (await request(`/world/${scanId}`)).json()
