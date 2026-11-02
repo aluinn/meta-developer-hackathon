@@ -50,9 +50,6 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node
 }
 
-const ICON_CUBE =
-  '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3 28 9.5v13L16 29 4 22.5v-13z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M4 9.5 16 16l12-6.5M16 16v13" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>'
-
 // Small line icons for the Work mode use cases (fixed text we wrote ourselves, so it is safe to use as HTML).
 const USE_CASES: Array<{ title: string; text: string; icon: string }> = [
   { title: 'Architecture', text: 'Measure and label an existing room from a phone scan.', icon: '<path d="M4 26V12l10-7 10 7v14M10 26v-8h8v8M3 26h22" />' },
@@ -149,11 +146,8 @@ function buildUpload(h: ScreenHandlers) {
     'Open the example room',
   )
 
-  // The brand badge sits on the seam between the two halves.
+  // A thin line on the edge between the two halves.
   const seam = el('div', 'seam')
-  const badge = el('div', 'seam-badge')
-  badge.innerHTML = ICON_CUBE
-  seam.append(badge)
 
   const brand = el('header', 'landing-brand')
   const title = el('h1', undefined, 'Room world')

@@ -1264,3 +1264,44 @@ body[data-mode='work'] {
 .half-chips li { border-radius: 0.35rem; }
 
 @media (max-width: 859px) { .half-game .rows { display: none; } }
+
+/* ---- Colour pass: neutral graphite, one accent per side (amber / teal), no purple, no divider box ---- */
+
+.landing { background: #141518; --game: #f5a524; --game-2: #f5a524; --work: #2bb3a3; }
+.half-game { background: #16171b; }
+.half-game .half-bg { background-image: linear-gradient(180deg, rgba(14, 15, 18, 0.4), rgba(14, 15, 18, 0.85)), url('/img/game-bg.jpg'); }
+.half-game::before { background: radial-gradient(circle at 15% 90%, rgba(245, 165, 36, 0.14), transparent 55%); }
+.half-work { background: #101a1c; }
+.half-work .half-bg { background-image: linear-gradient(180deg, rgba(10, 22, 24, 0.4), rgba(10, 22, 24, 0.85)), url('/img/work-bg.jpg'); }
+.half-work::before {
+  background-image: linear-gradient(rgba(120, 200, 190, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(120, 200, 190, 0.1) 1px, transparent 1px);
+}
+
+.half-game .half-eyebrow, .rows dt, .case-key strong { color: #f5a524; }
+.half-work .half-eyebrow { color: #5fd6c7; }
+.half-game .half-title { text-shadow: none; }
+
+.half-game .landing-btn-primary { background: #f5a524; color: #1c1203; box-shadow: none; }
+.half-game .landing-btn-primary:hover { background: #ffb940; }
+.half-work .landing-btn-primary { background: #2bb3a3; color: #04201d; box-shadow: none; }
+.half-work .landing-btn-primary:hover { background: #3fcdbc; }
+
+.half-chips li { background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.22); }
+.half-game .case { border-color: rgba(245, 165, 36, 0.3); background: rgba(40, 28, 8, 0.45); }
+.case { border-color: rgba(95, 214, 199, 0.28); background: rgba(8, 30, 30, 0.55); }
+.case-icon { color: #5fd6c7; }
+
+/* The divider: one thin neutral line, no badge. */
+.seam, .seam { box-shadow: none; background: rgba(255, 255, 255, 0.28); }
+@media (min-width: 860px) {
+  .seam { top: 0; bottom: 0; background: rgba(255, 255, 255, 0.28); }
+}
+
+/* Results screens follow the same two accents. */
+body[data-mode='game'] { --bg: #141518; --panel: #1d1f24; --border: #33363d; --accent: #f5a524; --accent-text: #1c1203; --muted: #a8a9ad; }
+body[data-mode='work'] { --bg: #eef3f3; --border: #c9d6d6; --accent: #0e7c86; --text: #112427; --muted: #52666a; }
+.screen-results[data-mode='game'] .tabbar { box-shadow: none; }
+.screen-results[data-mode='game'] .tab[aria-selected='true'] { background: #f5a524; color: #1c1203; }
+.screen-loading { background: #141518; }
+.screen-loading .spinner { border-top-color: #f5a524; }
+.landing-foot { text-align: left; padding-left: 1.75rem; }
