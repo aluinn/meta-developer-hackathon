@@ -170,7 +170,8 @@ function buildUpload(h: ScreenHandlers) {
 
   const halves = el('div', 'halves')
   halves.append(game, work)
-  section.append(input, halves, seam, brand, notes, foot)
+  work.append(seam) // the seam is part of the Work half, so it always sits exactly on the edge between the halves
+  section.append(input, halves, brand, notes, foot)
   if (h.onUseTestRoom) {
     const test = el('button', 'landing-dev', 'Use test room (dev only)')
     test.type = 'button'

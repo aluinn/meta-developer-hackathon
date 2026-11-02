@@ -839,7 +839,6 @@ body[data-mode='work'] {
   align-items: center;
   justify-content: center;
   min-height: 50dvh;
-  overflow: hidden;
   transition: flex-grow 0.5s ease;
 }
 
@@ -849,7 +848,7 @@ body[data-mode='work'] {
   background-size: cover;
   background-position: center;
   opacity: 0.3; /* the picture sits faintly behind the words */
-  transition: opacity 0.5s ease, transform 0.8s ease;
+  transition: opacity 0.5s ease;
 }
 
 .half-game { background: linear-gradient(135deg, #1a0b3d 0%, #0a1030 60%, #06223a 100%); }
@@ -1014,13 +1013,13 @@ body[data-mode='work'] {
 .case-icon { flex: 0 0 1.6rem; color: #8db4ff; }
 .case-icon svg { width: 1.6rem; height: 1.6rem; }
 
-/* The seam: a glowing line down the middle with the logo on it. */
+/* The seam: a glowing line along the edge between the halves, with the logo on it. It lives inside the Work half. */
 .seam {
   position: absolute;
-  z-index: 3;
+  z-index: 6;
+  top: 0;
   left: 0;
   right: 0;
-  top: 50%;
   height: 2px;
   background: linear-gradient(90deg, #b388ff, #ffffff, #4f8bff);
   box-shadow: 0 0 10px rgba(160, 160, 255, 0.5);
@@ -1051,8 +1050,8 @@ body[data-mode='work'] {
   top: 0;
   left: 0;
   right: 0;
-  padding: max(0.9rem, env(safe-area-inset-top)) 1rem 0;
-  text-align: center;
+  padding: max(0.9rem, env(safe-area-inset-top)) 1.75rem 0;
+  text-align: left;
   pointer-events: none;
 }
 
@@ -1121,12 +1120,12 @@ body[data-mode='work'] {
   .half-work .half-inner { margin-right: auto; padding-left: 4rem; }
   .halves:hover .half { flex-grow: 0.85; }
   .halves .half:hover { flex-grow: 1.35; }
-  .half:hover .half-bg { opacity: 0.5; transform: scale(1.04); }
+  .half:hover .half-bg { opacity: 0.5; }
 
   .seam {
-    top: 0;
-    bottom: 0;
-    left: 50%;
+    top: 4.5rem;
+    bottom: 3rem;
+    left: 0;
     right: auto;
     width: 2px;
     height: auto;
@@ -1138,8 +1137,8 @@ body[data-mode='work'] {
 
 @media (max-width: 859px) {
   .half { padding: 0; }
-  .half-inner { padding: 3.2rem 1.25rem 1.8rem; }
-  .half-work .half-inner { padding-top: 2.6rem; }
+  .half-inner { padding: 3.2rem 1.25rem 3.2rem; }
+  .half-work .half-inner { padding-top: 3.4rem; padding-bottom: 3rem; }
   .cases { grid-template-columns: 1fr; }
   .landing-brand p { display: none; }
   .landing-notes { bottom: 1.6rem; }
