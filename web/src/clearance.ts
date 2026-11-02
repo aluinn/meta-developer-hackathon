@@ -40,6 +40,11 @@ export const PERSON_WIDTHS = {
   wheelchair: { label: 'Wheelchair', widthM: 0.85 },
 } as const
 export type PersonKind = keyof typeof PERSON_WIDTHS
+/** "Walking", "Walker", "Wheelchair", or "Custom width" for anything else. */
+export function personLabel(widthM: number): string {
+  const kind = (Object.keys(PERSON_WIDTHS) as PersonKind[]).find((k) => Math.abs(PERSON_WIDTHS[k].widthM - widthM) < 1e-6)
+  return kind ? PERSON_WIDTHS[kind].label : 'Custom width'
+}
 /** The range of the "any width" slider. */
 export const WIDTH_SLIDER = { minM: 0.4, maxM: 1.2, stepM: 0.05 }
 
@@ -124,6 +129,8 @@ export interface ClearanceResult {
  */
 /** Clearance at which a route counts as roomy (a gap of 1.2 m, the widest setting on the slider). Also the "comfort" distance. */
 const ROOMY_M = 0.6
+/** The same, as a gap in cm: gaps this wide or wider are not reported as "narrow". */
+export const ROOMY_GAP_CM = ROOMY_M * 200
 
 // ---------- The floor map: every cell's clearance ----------
 
@@ -742,7 +749,7 @@ export function summarise(result: ClearanceResult, label: string): string {
   const floor = `${Math.round(result.reachablePercent)}% of the floor reachable.`
   if (result.reachable) {
     const gap =
-      result.narrowestGapCm === null ? `No gaps narrower than ${ROOMY_M * 200} cm on the way.` : `Narrowest gap: ${result.narrowestGapCm} cm.`
+      result.narrowestGapCm === null ? `No gaps narrower than ${ROOMY_GAP_CM} cm on the way.` : `Narrowest gap: ${result.narrowestGapCm} cm.`
     return `${who}: goal reachable. ${floor} ${gap}`
   }
   return `${who}: goal NOT reachable. ${floor} ${blockedReason(result)}`

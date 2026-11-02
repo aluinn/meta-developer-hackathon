@@ -2,6 +2,7 @@
 // in production the server also serves this page, and in development Vite forwards these paths (vite.config.ts).
 
 import { USE_FAKE_SERVER } from './config.ts'
+import { FAKE_LAYOUT_MS, parseLayoutResponse, proposeFakeLayout, type LayoutResult, type RenderResult, type ScoreResult } from './layoutAgent.ts'
 import { parseWorld, type World } from './world.ts'
 
 const MAX_SCAN_BYTES = 100 * 1024 * 1024 // the server's limit
@@ -13,6 +14,12 @@ const MAX_POLL_FAILURES = 5 // in a row; a single dropped request is fine
 let pollIntervalMs = 2000
 
 let apiBase = ''
+// Whether to pretend to be the server (config.ts). Tests can flip it with setFakeServer.
+let fake = USE_FAKE_SERVER
+/** For tests only: pretend to be the server (true) or really call it (false). */
+export function setFakeServer(on: boolean): void {
+  fake = on
+}
 /** For tests only: how often to ask the server for progress. */
 export function setPollInterval(ms: number): void {
   pollIntervalMs = ms
@@ -222,7 +229,7 @@ function voiceError(message: string, status = 0): ApiError {
 
 /** Send a recording (a 16 kHz mono WAV) to the server and get back what was said. */
 export async function transcribe(wav: Blob): Promise<string> {
-  if (USE_FAKE_SERVER) {
+  if (fake) {
     await sleep(1000)
     return FAKE_TRANSCRIPT
   }
@@ -257,4 +264,137 @@ export async function transcribe(wav: Blob): Promise<string> {
     throw voiceError("The server's answer wasn't what we expected. Type your goal instead.", response.status)
   }
   return data.transcript.trim()
+}
+
+// ---- Layout agent, before/after pictures and the scan score (Z6) ----
+
+const LAYOUT_TIMEOUT_MS = 120 * 1000 // the AI can take 20 seconds or more
+const RENDER_TIMEOUT_MS = 180 * 1000 // drawing a picture is slower still
+const SCORE_TIMEOUT_MS = 90 * 1000 // the first score for a scan has to render it from 8 cameras
+const MAX_PHOTO_BYTES = 15 * 1024 * 1024 // the server's limit
+const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+
+const NOT_SCANNED =
+  "This room wasn't scanned, so the server doesn't know it. Layout suggestions and the match score need a room you scanned and uploaded."
+const SCAN_FORGOTTEN =
+  'The server no longer has this scan (the free server forgets scans when it restarts). Upload the scan again.'
+
+/** Messages for the statuses we have something better to say about. Anything else falls back to the general wording in explain(). */
+export const LAYOUT_ERRORS: Record<number, string> = {
+  404: SCAN_FORGOTTEN,
+  422: "The layout agent's suggestion didn't pass our checks, so nothing was changed. Try again, or word your goal differently.",
+}
+export const RENDER_ERRORS: Record<number, string> = {
+  404: SCAN_FORGOTTEN,
+  413: 'That photo is too big. The limit is 15 MB.',
+  415: "We couldn't read that photo. Use a JPEG, PNG or WebP picture (iPhone HEIC photos don't work).",
+  422: "We can't draw this one: it only works when furniture was moved (and nothing added or removed). Try a different layout.",
+}
+export const SCORE_ERRORS: Record<number, string> = {
+  404: 'No match score yet: the scan has to be fully processed (labelled) first.',
+}
+
+/** Like request(), but says something specific for the statuses in `messages`. */
+async function endpoint(path: string, init: RequestInit, timeoutMs: number, messages: Record<number, string>): Promise<Response> {
+  try {
+    return await request(path, init, timeoutMs)
+  } catch (err) {
+    const text = err instanceof ApiError && err.status !== undefined ? messages[err.status] : undefined
+    if (!text) throw err
+    const replaced = new ApiError(text)
+    replaced.status = (err as ApiError).status
+    throw replaced
+  }
+}
+
+/** The server's answer, read as JSON, or a friendly error if it isn't. */
+async function readJson(res: Response): Promise<unknown> {
+  try {
+    return await res.json()
+  } catch {
+    throw new ApiError("The server's answer wasn't what we expected. Please try again.")
+  }
+}
+
+/**
+ * Ask the layout agent to rearrange the room for a goal (POST /layout). `scanId` is the scan the room came from (scanIdOf(world));
+ * the real server needs one. Only movable objects move. The pretend server works on any room.
+ */
+export async function getLayout(goal: string, world: World, scanId: string | null): Promise<LayoutResult> {
+  const text = goal.trim()
+  if (text.length < 3) throw new ApiError('Say or type a goal first, like "make room for a wheelchair".')
+  if (fake) {
+    await sleep(FAKE_LAYOUT_MS)
+    return proposeFakeLayout(world, text)
+  }
+  if (!scanId) throw new ApiError(NOT_SCANNED)
+  const body = JSON.stringify({ scan_id: scanId, goal: text, world })
+  const res = await endpoint('/layout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }, LAYOUT_TIMEOUT_MS, LAYOUT_ERRORS)
+  try {
+    return parseLayoutResponse(await readJson(res), text)
+  } catch (err) {
+    if (err instanceof ApiError) throw err
+    throw new ApiError("The layout agent's answer wasn't what we expected. Please try again.")
+  }
+}
+
+/** Check a chosen photo before sending it, so mistakes get a clear message straight away. */
+export function checkPhoto(file: { name: string; size: number; type: string }): void {
+  const name = file.name.toLowerCase()
+  if (/\.(heic|heif)$/.test(name) || /hei[cf]/.test(file.type)) {
+    throw new ApiError("iPhone HEIC photos aren't supported. Take the photo as JPEG (Settings > Camera > Formats > Most Compatible) or choose a JPEG, PNG or WebP picture.")
+  }
+  const okType = PHOTO_TYPES.includes(file.type) || (file.type === '' && /\.(jpe?g|png|webp)$/.test(name))
+  if (!okType) throw new ApiError('Please choose a JPEG, PNG or WebP picture.')
+  if (file.size === 0) throw new ApiError('That photo is empty.')
+  if (file.size > MAX_PHOTO_BYTES) throw new ApiError(RENDER_ERRORS[413])
+}
+
+/** Ask for realistic before and after pictures of the moved furniture, from a photo of the room (POST /render). */
+export async function renderBeforeAfter(scanId: string | null, photo: File, oldWorld: World, newWorld: World): Promise<RenderResult> {
+  checkPhoto(photo)
+  if (fake) {
+    await sleep(800)
+    return { beforeUrl: null, afterUrl: null, moved: [], changedFraction: null, likelyChangedTooMuch: false } // the pretend server draws nothing
+  }
+  if (!scanId) throw new ApiError(NOT_SCANNED)
+  const form = new FormData()
+  form.append('scan_id', scanId)
+  form.append('photo', photo, photo.name)
+  form.append('old_world', JSON.stringify(oldWorld))
+  form.append('new_world', JSON.stringify(newWorld))
+  const res = await endpoint('/render', { method: 'POST', body: form }, RENDER_TIMEOUT_MS, RENDER_ERRORS)
+  const data = await readJson(res)
+  const d = typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : {}
+  if (typeof d.before_url !== 'string' || typeof d.after_url !== 'string') {
+    throw new ApiError("The server's answer wasn't what we expected. Please try again.")
+  }
+  const stamp = `?t=${Date.now()}` // the same address is reused for every render, so ask the browser not to show an old picture
+  const moved = Array.isArray(d.moved)
+    ? d.moved.flatMap((m: unknown) => {
+        const o = typeof m === 'object' && m !== null ? (m as Record<string, unknown>) : {}
+        return typeof o.id === 'string' ? [{ id: o.id, label: typeof o.label === 'string' ? o.label : o.id }] : []
+      })
+    : []
+  return {
+    beforeUrl: apiBase + d.before_url + stamp,
+    afterUrl: apiBase + d.after_url + stamp,
+    moved,
+    changedFraction: typeof d.changed_fraction === 'number' ? d.changed_fraction : null,
+    likelyChangedTooMuch: d.likely_changed_too_much === true,
+  }
+}
+
+/** How closely our 3D model matches the scanned room (GET /score/{scan_id}). Only for a real, labelled scan. */
+export async function getScore(scanId: string | null): Promise<ScoreResult> {
+  if (fake) {
+    await sleep(600)
+    return { overallPercent: 72, warnings: [], pretend: true }
+  }
+  if (!scanId) throw new ApiError(NOT_SCANNED)
+  const data = await readJson(await endpoint(`/score/${scanId}`, {}, SCORE_TIMEOUT_MS, SCORE_ERRORS))
+  const d = typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : {}
+  if (typeof d.overall_percent !== 'number') throw new ApiError("The server's answer wasn't what we expected. Please try again.")
+  const warnings = Array.isArray(d.warnings) ? d.warnings.filter((w): w is string => typeof w === 'string') : []
+  return { overallPercent: d.overall_percent, warnings, pretend: false }
 }
