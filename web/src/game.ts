@@ -25,7 +25,7 @@ export const TUNING = {
   countdownSeconds: 3,
   checkpointBonus: 8, // seconds added at every gate
   lives: 3, // you lose one when a hazard hits you or you fall from height; at none, the race is over
-  fallLimit: 1.6, // a drop of this many character-heights (from where you last stood) costs a life
+  fallLimit: 2.2, // a drop of this many character-heights (from where you last stood) costs a life
   stunSeconds: 0.8,
   invulnerableSeconds: 2,
   itemRespawnSeconds: 12,

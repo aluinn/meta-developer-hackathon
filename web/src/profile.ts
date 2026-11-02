@@ -44,9 +44,9 @@ export const PROFILES: Record<ProfileName, Profile> = {
     cameraFar: 200,
   },
   tiny: {
-    character: { height: 0.22, radius: 0.05, stepHeight: 0.03, skin: 0.004, snapToGround: 0.035, stepMinWidth: 0.025 },
+    character: { height: 0.15, radius: 0.035, stepHeight: 0.025, skin: 0.003, snapToGround: 0.03, stepMinWidth: 0.02 },
     move: { runSpeed: 1.1, gravity: GRAVITY_TINY, jumpSpeed: Math.sqrt(2 * GRAVITY_TINY * JUMP_HEIGHT_TINY), coyoteTime: 0.1, jumpBuffer: 0.12, flyRise: 0.9, flySink: 0.4 },
-    camera: { distance: 1.4, minDistance: 0.25, headHeight: 0.1, enoughRoom: 0.9, wallClearance: 0.05, pitch: 0.55 }, // far enough back to show how big the room is
+    camera: { distance: 1.6, minDistance: 0.25, headHeight: 0.07, enoughRoom: 0.9, wallClearance: 0.05, pitch: 0.55 }, // far enough back to show how big the room is
     goalRadius: 0.22,
     goalHeightSlack: 0.5,
     markerScale: 0.35,

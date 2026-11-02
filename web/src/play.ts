@@ -192,7 +192,7 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
     if (CLASSIC) return
     const seed = nextSeed++
     const course = generateCourse(getGraph(), [spawnFeet.x, spawnFeet.y, spawnFeet.z], {
-      seed, checkpoints: 4, hazards: 3, unit: CHARACTER.height, runSpeed: MOVE.runSpeed, elevatedMin: CHARACTER.height * 0.5,
+      seed, checkpoints: 4, hazards: 2, unit: CHARACTER.height, runSpeed: MOVE.runSpeed, elevatedMin: CHARACTER.height * 0.5,
     })
     if (!course) return
     const game = new Game(course, { unit: CHARACTER.height, runSpeed: MOVE.runSpeed, seed })
