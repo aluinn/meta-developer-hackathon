@@ -12,6 +12,8 @@ export interface ScreenHandlers {
   onUseExample: () => void
   /** Only passed in development builds; adds a "Use test room" button. */
   onUseTestRoom?: () => void
+  /** Only passed in development builds; adds a "Use narrow-gap test room" button (for the clearance check). */
+  onUseGapTestRoom?: () => void
   onStartOver: () => void
   onPlay: () => void
   onLayout: () => void
@@ -86,6 +88,12 @@ function buildUpload(h: ScreenHandlers) {
     test.type = 'button'
     test.addEventListener('click', h.onUseTestRoom)
     section.append(test)
+  }
+  if (h.onUseGapTestRoom) {
+    const gap = el('button', 'btn btn-small', 'Use narrow-gap test room (dev only)')
+    gap.type = 'button'
+    gap.addEventListener('click', h.onUseGapTestRoom)
+    section.append(gap)
   }
   return { section, title, fileInfo, error }
 }

@@ -108,3 +108,9 @@ export async function loadTestWorld(): Promise<World> {
   const { default: raw } = await import('./test_world.json?raw')
   return parseWorld(JSON.parse(raw))
 }
+
+/** Load web/src/clearance_test_world.json: the example with the table and chair moved to leave a 78 cm gap (Z4 testing). */
+export async function loadClearanceTestWorld(): Promise<World> {
+  const { default: raw } = await import('./clearance_test_world.json?raw')
+  return parseWorld(JSON.parse(raw))
+}

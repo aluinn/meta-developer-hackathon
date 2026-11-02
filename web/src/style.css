@@ -9,6 +9,8 @@
   --accent-text: #ffffff;
   --border: #d5d9e4;
   --error: #b42318;
+  --ok: #2b8a3e;
+  --bad: #c92a2a;
   color-scheme: light dark;
 }
 
@@ -22,6 +24,8 @@
     --accent-text: #0d1020;
     --border: #353a4a;
     --error: #ff8a80;
+    --ok: #69db7c;
+    --bad: #ff8787;
   }
 }
 
@@ -690,16 +694,72 @@ p:focus {
   cursor: default;
 }
 
-/* On a phone (narrow or short screen) the panel takes the place of the 3D view: press Layout again to go back. */
-@media (max-width: 700px), (max-height: 500px) {
+/* With the Layout tab open the 3D view stays visible, because the clearance check draws on it. */
+
+/* Phone held upright (or a narrow window): the 3D view on top, the panel scrolls underneath. */
+@media (max-width: 899px) and (min-height: 501px) {
   .layout-open .view-area {
+    flex: 0 0 38dvh;
+  }
+
+  /* The role legend would cover half the smaller view; the clearance check has its own colour key. */
+  .layout-open .legend {
     display: none;
   }
 
   .layout-box {
     flex: 1;
+    min-height: 0;
     max-height: none;
   }
+}
+
+/* Laptop, or a phone held sideways: the 3D view on the left, the panel on the right. */
+@media (min-width: 900px), (max-height: 500px) {
+  .screen-results.layout-open {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(18rem, 26rem);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'header header'
+      'view box'
+      'tabs tabs';
+  }
+
+  .layout-open .results-header {
+    grid-area: header;
+  }
+
+  .layout-open .view-area {
+    grid-area: view;
+  }
+
+  .layout-open .layout-box {
+    grid-area: box;
+    min-height: 0;
+    max-height: none;
+  }
+
+  .layout-open .tabbar {
+    grid-area: tabs;
+    justify-self: center;
+  }
+}
+
+/* Phone held sideways: a narrower panel, so the 3D view gets more of the width. */
+@media (max-height: 500px) {
+  .screen-results.layout-open {
+    grid-template-columns: minmax(0, 1fr) minmax(15rem, 19rem);
+  }
+
+  .clearance-score {
+    font-size: 1rem;
+  }
+}
+
+/* The panel's own width decides its layout (it may be a narrow side column on a wide screen). */
+.layout-box {
+  container-type: inline-size;
 }
 
 /* Wide enough: mic on the left, text box on the right. */
@@ -709,7 +769,7 @@ p:focus {
   gap: 0.25rem;
 }
 
-@media (min-width: 640px) {
+@container (min-width: 600px) {
   .layout-panel {
     flex-direction: row;
     gap: 1.5rem;
@@ -741,6 +801,185 @@ p:focus {
   .mic-row {
     margin: 0.4rem 0;
   }
+}
+
+/* ---- Clearance check (under the voice panel on the Layout tab) ---- */
+
+.clearance-panel {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.width-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin: 0.75rem 0 0.5rem;
+}
+
+.width-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 3.5rem;
+  padding: 0.4rem;
+  border: 2px solid var(--accent);
+  border-radius: 0.8rem;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.width-btn[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.width-btn-name {
+  font-size: 0.95rem;
+}
+
+.width-btn-size {
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.width-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.25rem 0 0.75rem;
+}
+
+.width-slider-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.width-slider {
+  flex: 1;
+  min-width: 0;
+  height: 2.75rem; /* a big target for a finger */
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.width-slider-value {
+  min-width: 3.6rem;
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.clearance-score {
+  padding: 0.6rem 0.8rem;
+  border-left: 0.35rem solid var(--border);
+  border-radius: 0.4rem;
+  background: var(--bg);
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.clearance-score.is-reachable {
+  border-left-color: var(--ok);
+}
+
+.clearance-score.is-blocked {
+  border-left-color: var(--bad);
+}
+
+.clearance-notes {
+  margin: 0.5rem 0 0;
+  padding-left: 1.2rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.clearance-notes:empty,
+.clearance-timing:empty {
+  display: none;
+}
+
+.clearance-pause {
+  display: inline-flex;
+  margin: 0.75rem 0 0.5rem;
+}
+
+.clearance-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0.25rem 0 0.5rem;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.clearance-key li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.key-swatch {
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 0.2rem;
+}
+
+/* Same colours as clearanceView.ts. */
+.key-route {
+  background: #69db7c;
+}
+
+.key-reach {
+  background: rgba(21, 170, 191, 0.45);
+}
+
+.key-narrowest {
+  background: #f59f00;
+}
+
+.key-blocked {
+  background: #e03131;
+}
+
+.clearance-how {
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
+}
+
+.clearance-how summary {
+  padding: 0.5rem 0;
+  color: var(--accent);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.clearance-how p {
+  margin: 0.4rem 0;
+  color: var(--muted);
+}
+
+.clearance-disclaimer {
+  margin-top: 0.75rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.clearance-timing {
+  margin-top: 0.5rem;
+  color: var(--muted);
+  font-size: 0.75rem;
 }
 
 /* ---- Character panel ---- */
