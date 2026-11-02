@@ -27,6 +27,14 @@ class LabelRequest(BaseModel):
     prompts: list[str] = Field(default_factory=lambda: list(PROMPTS), min_length=1, max_length=16, description='What to look for, as short noun phrases, e.g. ["toilet", "sink", "bathtub"]. Default: a broad list covering living rooms, bedrooms and bathrooms.')
 
 
+def clean_prompts(prompts: list[str]) -> list[str]:
+    """Lower-case and trim the prompts; reject anything that is not a short noun phrase."""
+    cleaned = [p.strip().lower() for p in prompts if p.strip()]
+    if not cleaned or any(len(p) > 40 or "__" in p for p in cleaned):
+        raise HTTPException(422, "Prompts must be short noun phrases (max 40 characters).")
+    return cleaned
+
+
 @router.post("/scan/{scan_id}/label")
 async def label(scan_id: str, req: LabelRequest | None = None) -> dict:
     scan_dir = _scan_dir(scan_id)
@@ -36,9 +44,7 @@ async def label(scan_id: str, req: LabelRequest | None = None) -> dict:
         sam = SamClient()
     except MissingApiKey as exc:
         raise HTTPException(503, str(exc)) from exc
-    prompts = [p.strip().lower() for p in (req.prompts if req else PROMPTS) if p.strip()]
-    if not prompts or any(len(p) > 40 or "__" in p for p in prompts):
-        raise HTTPException(422, "Prompts must be short noun phrases (max 40 characters).")
+    prompts = clean_prompts(req.prompts if req else PROMPTS)
     return await label_scan(scan_dir, sam, labeller_name="sam-3.1", prompts=prompts)
 
 

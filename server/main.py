@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from jobs import router as jobs_router
 from labels import router as labels_router
 from layout import router as layout_router
 from photo_render import router as render_router
@@ -23,6 +24,7 @@ app = FastAPI(title="Room world server")
 app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_methods=["GET", "POST"], allow_headers=["*"])
 app.include_router(scans_router)
 app.include_router(labels_router)
+app.include_router(jobs_router)
 app.include_router(layout_router)
 app.include_router(render_router)
 app.include_router(score_router)

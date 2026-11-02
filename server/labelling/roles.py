@@ -84,7 +84,7 @@ class MuseSparkClient:
         api_key = api_key or os.environ.get("MODEL_API_KEY")
         if not api_key:
             raise MissingApiKey("MODEL_API_KEY is not set. Copy .env.example to .env and add your key.")
-        self._client = AsyncOpenAI(base_url=BASE_URL, api_key=api_key)
+        self._client = AsyncOpenAI(base_url=BASE_URL, api_key=api_key, timeout=120, max_retries=2)  # images in, JSON out: slower than SAM
 
     async def assign(self, annotated_views_png: list[bytes], objects: list[dict]) -> dict[str, RoleAnswer]:
         content: list[dict] = [{"type": "input_text", "text": PROMPT.format(objects=json.dumps(objects, indent=1))}]

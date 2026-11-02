@@ -34,10 +34,13 @@ flowchart LR
 Both sides can be built in parallel because `shared/example_world.json` is a valid stand-in.
 
 ## How the website uses the server
-Choosing a scan file on the Upload screen runs `web/src/api.ts` `processScan()`: `POST /scan` (multipart field `file`), then
-`POST /scan/{id}/label` (no body: the server's broad default prompts), then `POST /scan/{id}/world`, then `GET /world/{id}`, and the world.json that comes back is
-shown by the existing viewer. The Loading screen shows a message before each step; failures become plain-English messages on the Upload screen
-(wrong file type, over 100 MB, unreadable file, no furniture found, AI service problem, server unreachable). Addresses are relative (`/scan`), so it works the same on
+Choosing a scan file on the Upload screen runs `web/src/api.ts` `processScan()`: `POST /scan` (multipart field `file`), then `POST /scan/{id}/process`, which **starts a background job and
+returns at once** (202), then it asks `GET /scan/{id}/status` every 2 seconds until the job is done, then `GET /world/{id}`; the world.json that comes back is
+shown by the existing viewer. The job (`server/jobs.py`) runs the labelling (A2) and then the roles (A3). Why a job: the free host is slow (labelling took about 100 s there) and hosting layers often
+cut a single request off at about 100 s; now no request lasts more than a second or so, and the Loading screen shows real progress ("Looking for furniture… 64%").
+Status is `{state: queued|running|done|error, step: rendering|labelling|roles|done, percent, error_kind: no_key|no_objects|ai_service|failed}`. Only **one job runs at a time** (the 512 MB host cannot take two);
+others wait with state `queued`. Jobs live in memory, so if the server restarts the status answers 404 and the website says so. A few lost SAM questions (under a quarter) are tolerated; each AI request has a timeout (SAM 45 s, others 120 s) with 2 retries.
+Failures become plain-English messages on the Upload screen (wrong file type, over 100 MB, unreadable file, no furniture found, AI service problem, server restarted, server unreachable). The older `POST /scan/{id}/label` and `/world` endpoints still work and are used by scripts. Addresses are relative (`/scan`), so it works the same on
 the deployed site and, via the proxy in `web/vite.config.ts`, under `npm run dev`. One scan takes about 45 seconds and costs about $0.25 in Meta credits.
 Not yet connected: Layout tab (`/layout`), voice (`/transcribe`), before/after (`/render`) and the score (`/score`). Test: `node web/scripts/test-api.ts`.
 
@@ -60,6 +63,7 @@ API keys stay on the server (`MODEL_API_KEY` in `.env`, git-ignored). The browse
 | A1 | `POST /scan` | upload .glb/.obj (max 100MB), save, simplify, return `scan_id` + triangle counts | no | tested with generated meshes |
 | A2 | `POST /scan/{scan_id}/label` | 8 virtual cameras, SAM 3.1 per view per prompt, project masks to 3D, vote, bounding boxes | yes (`sam-3.1`) | geometry/voting tested with a fake SAM; real SAM call proven on the bathroom scan |
 | A3 | `POST /scan/{scan_id}/world` | Muse Spark assigns roles, builds and validates `world.json` | yes (`muse-spark-1.3`) | real Muse Spark call proven on the bathroom scan |
+| A2+A3 | `POST /scan/{scan_id}/process`, `GET /scan/{scan_id}/status` | the same two steps as a background job with progress (what the website uses) | yes | proven on the bathroom scan, locally (longest request 0.3 s) |
 | A3 | `GET /world/{scan_id}` | returns the saved `world.json` | no | tested |
 | A4 | `POST /transcribe` | browser audio -> transcript | yes (`muse-voice-transcribe-1.0`) | real call proven with a WAV tone (empty transcript); real speech and WebM untested |
 | A4 | `POST /layout` | goal text + world -> new valid `world.json` + a reason per change | yes (`muse-spark-1.3`) | real model proven on the example world (first attempt accepted); validation/retry tested with a scripted stand-in |

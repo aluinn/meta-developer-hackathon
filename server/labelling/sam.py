@@ -18,6 +18,8 @@ from .types import Detection
 BASE_URL = "https://api.meta.ai/v1"
 MODEL = "sam-3.1"
 MAX_CONCURRENT_REQUESTS = 4
+REQUEST_TIMEOUT_S = 45  # the library default is 10 minutes: one stuck request would freeze a whole job
+MAX_RETRIES = 2
 
 
 class MissingApiKey(RuntimeError):
@@ -29,7 +31,7 @@ class SamClient:
         api_key = api_key or os.environ.get("MODEL_API_KEY")
         if not api_key:
             raise MissingApiKey("MODEL_API_KEY is not set. Copy .env.example to .env and add your key.")
-        self._client = AsyncOpenAI(base_url=BASE_URL, api_key=api_key)
+        self._client = AsyncOpenAI(base_url=BASE_URL, api_key=api_key, timeout=REQUEST_TIMEOUT_S, max_retries=MAX_RETRIES)
         self._limit = asyncio.Semaphore(concurrency)
 
     async def segment(self, view_index: int, png: bytes, prompt: str) -> list[Detection]:
