@@ -50,18 +50,15 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node
 }
 
-// Where Work mode helps (plain text, no icons).
-const USE_CASES: Array<[string, string]> = [
-  ['Architecture', 'Measure and label an existing room from a phone scan'],
-  ['Real estate', 'Turn a viewing into a 3D model you can share'],
-  ['Interior design', 'See what is in a space and how big it is (layout tools to come)'],
-  ['Facilities and safety', 'Check clearances and obstacles before a site visit'],
-]
-const GAME_KEYS_HELP: Array<[string, string]> = [
-  ['WASD', 'Run'],
-  ['Space', 'Jump, or fly with Wings'],
-  ['E', 'Use a power-up'],
-  ['Mouse', 'Look around'],
+const ICON_CUBE =
+  '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3 28 9.5v13L16 29 4 22.5v-13z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M4 9.5 16 16l12-6.5M16 16v13" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>'
+
+// Small line icons for the Work mode use cases (fixed text we wrote ourselves, so it is safe to use as HTML).
+const USE_CASES: Array<{ title: string; text: string; icon: string }> = [
+  { title: 'Architecture', text: 'Measure and label an existing room from a phone scan.', icon: '<path d="M4 26V12l10-7 10 7v14M10 26v-8h8v8M3 26h22" />' },
+  { title: 'Real estate', text: 'Turn a viewing into a 3D model you can share.', icon: '<path d="M4 14 14 5l10 9M7 12v14h14V12M12 26v-7h4v7" />' },
+  { title: 'Interior design', text: 'See what is in a space and how big it is. (Layout tools: soon.)', icon: '<path d="M5 18v-5a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v5M3 18h22v5H3zM6 23v3M22 23v3" />' },
+  { title: 'Facilities & safety', text: 'Check clearances and spot obstacles before you visit.', icon: '<path d="M14 4 3 24h22zM14 11v6M14 20.5v.5" />' },
 ]
 
 function buildUpload(h: ScreenHandlers) {
@@ -81,45 +78,87 @@ function buildUpload(h: ScreenHandlers) {
     if (file) h.onFileChosen(file, pendingMode)
   })
 
+  const button = (label: string, kind: 'primary' | 'ghost', onClick: () => void) => {
+    const b = el('button', `landing-btn landing-btn-${kind}`, label)
+    b.type = 'button'
+    b.addEventListener('click', onClick)
+    return b
+  }
   const choose = (mode: Mode) => () => {
     pendingMode = mode
     input.click()
   }
 
-  const half = (mode: Mode, number: string, name: string, titleText: string, text: string, rows: Array<[string, string]>, primary: string, secondary: string) => {
+  const half = (mode: Mode, eyebrow: string, titleText: string, text: string, chips: string[], primary: string, secondary: string) => {
     const side = el('div', `half half-${mode}`)
     const bg = el('div', 'half-bg')
     const inner = el('div', 'half-inner')
-    const tag = el('p', 'half-eyebrow')
-    tag.append(el('span', undefined, number), name)
+    const tag = el('p', 'half-eyebrow', eyebrow)
     const heading = el('h2', 'half-title', titleText)
     const blurb = el('p', 'half-text', text)
+    const chipRow = el('ul', 'half-chips')
+    for (const c of chips) chipRow.append(el('li', undefined, c))
     const actions = el('div', 'half-actions')
-    const main = el('button', 'landing-btn', primary)
-    main.type = 'button'
-    main.addEventListener('click', choose(mode))
-    const other = el('button', 'landing-link', secondary)
-    other.type = 'button'
-    other.addEventListener('click', () => h.onUseExample(mode))
-    actions.append(main, other)
-    const list = el('dl', 'rows')
-    for (const [term, desc] of rows) {
-      const row = el('div')
-      row.append(el('dt', undefined, term), el('dd', undefined, desc))
-      list.append(row)
+    const link = el('button', 'landing-link', secondary)
+    link.type = 'button'
+    link.addEventListener('click', () => h.onUseExample(mode))
+    actions.append(button(primary, 'primary', choose(mode)), link)
+    inner.append(tag, heading, blurb, chipRow, actions)
+    if (mode === 'work') {
+      const cases = el('ul', 'cases')
+      for (const c of USE_CASES) {
+        const li = el('li', 'case')
+        const icon = el('span', 'case-icon')
+        icon.innerHTML = `<svg viewBox="0 0 28 30" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${c.icon}</svg>`
+        const words = el('span')
+        words.append(el('strong', undefined, c.title), el('span', undefined, c.text))
+        li.append(icon, words)
+        cases.append(li)
+      }
+      inner.append(cases)
     }
-    inner.append(tag, heading, blurb, actions, list)
+    if (mode === 'game') {
+      const keys = el('dl', 'rows')
+      for (const [key, what] of [['WASD', 'Run'], ['Space', 'Jump, or fly with Wings'], ['E', 'Use a power-up'], ['Mouse', 'Look around']]) {
+        const row = el('div')
+        row.append(el('dt', undefined, key), el('dd', undefined, what))
+        keys.append(row)
+      }
+      inner.append(keys)
+    }
     side.append(bg, inner)
     return side
   }
 
-  const game = half('game', '01', 'Game mode', 'Race through your own room.', 'Scan a room with your phone. Run, climb and jump across the furniture as a small character and catch the flag before time runs out.', GAME_KEYS_HELP, 'Scan a room', 'Try the example room')
-  const work = half('work', '02', 'Work mode', 'A 3D model of the room, labelled.', 'Upload a scan to get every object identified, measured and given a role, in a model you can inspect.', USE_CASES, 'Upload a scan', 'Open the example room')
+  const game = half(
+    'game',
+    'Game mode',
+    'Your room is the level.',
+    'Scan a room with your phone. Run, climb and jump across the furniture as a small hero, dodge the hazards and catch the flag before time runs out.',
+    ['3 lives', 'Power-ups', 'Fly mode', 'Make your own hero'],
+    'Scan & play',
+    'Try the example room',
+  )
+  const work = half(
+    'work',
+    'Work mode',
+    'Your space, understood.',
+    'Upload a scan to get every object identified, measured and given a role, in a model you can inspect.',
+    ['Object detection', 'Real dimensions', 'Role labels', 'Share-ready model'],
+    'Upload a scan',
+    'Open the example room',
+  )
+
+  // The brand badge sits on the seam between the two halves.
+  const seam = el('div', 'seam')
+  const badge = el('div', 'seam-badge')
+  badge.innerHTML = ICON_CUBE
+  seam.append(badge)
 
   const brand = el('header', 'landing-brand')
   const title = el('h1', undefined, 'Room world')
   title.tabIndex = -1
-  brand.append(title)
+  brand.append(title, el('p', undefined, 'Scan a real room. Play it or plan with it.'))
 
   const fileInfo = el('p', 'file-info')
   fileInfo.setAttribute('aria-live', 'polite')
@@ -131,7 +170,7 @@ function buildUpload(h: ScreenHandlers) {
 
   const halves = el('div', 'halves')
   halves.append(game, work)
-  section.append(input, halves, brand, notes, foot)
+  section.append(input, halves, seam, brand, notes, foot)
   if (h.onUseTestRoom) {
     const test = el('button', 'landing-dev', 'Use test room (dev only)')
     test.type = 'button'
