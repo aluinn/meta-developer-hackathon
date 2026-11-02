@@ -3,21 +3,21 @@
 
 import RAPIER from '@dimforge/rapier3d-compat'
 import * as THREE from 'three'
-import { createCharacterModel } from './character.ts'
+import { createCharacter } from './character.ts'
 import { createColliderDebug, type ColliderDebug } from './colliderDebug.ts'
 import { angleDiff, createFollowCamera } from './followCamera.ts'
 import { createInput, hasTouch } from './input.ts'
 import { MOVE, newMotionState, stepCharacter } from './motion.ts'
 import { CHARACTER, FIXED_DT, buildPhysicsWorld, createCharacterBody, freePhysics, initPhysics } from './physics.ts'
-import { OBJECT_LABEL, SPAWN_MARKER } from './roomScene.ts'
+import { applyProfile } from './profile.ts'
+import { GOAL_MARKER, OBJECT_LABEL, SPAWN_MARKER } from './roomScene.ts'
+import { extractTriangles } from './scanCollider.ts'
 import { loadScanMesh, scanMeshUrl } from './scanMesh.ts'
 import { createStage } from './stage.ts'
 import type { World } from './world.ts'
 
-const GOAL_RADIUS = 0.5 // metres, measured across the floor
 const FALL_LIMIT = 3 // metres below the floor: respawn
 const MAX_STEPS_PER_FRAME = 5 // if the phone stalls, skip ahead rather than freeze
-const CAMERA_WALL_SLACK = 1 // metres the camera may go past the (undrawn) room walls; furniture always blocks it
 
 // Debug switches, read from the page address: e.g. http://localhost:5173/?colliders&fps
 const params = new URLSearchParams(window.location.search)
@@ -42,23 +42,30 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
   // ---- Drawing ----
   const stage = createStage(container)
   stage.setRoom(world)
-  // If this world came from a scan, you play in the scanned room itself. The boxes stay in the physics (they are what you bump into and
-  // jump onto) but are not drawn. If the scan cannot be loaded, the boxes are drawn as before.
+  // If this world came from a scan, you play ON the scanned room itself, as a toy-sized character: the scan's real surfaces are the
+  // ground (see physics.ts) and the boxes are not drawn. If the scan cannot be loaded, it is the person-sized game on boxes, as before.
   const scanUrl = scanMeshUrl(world)
+  let scanMesh: THREE.Object3D | null = null
   if (scanUrl) {
     try {
-      stage.scanLayer.add(await loadScanMesh(scanUrl))
+      scanMesh = await loadScanMesh(scanUrl)
+      stage.scanLayer.add(scanMesh)
       stage.setBoxStyle('hidden')
     } catch {
-      // keep the boxes
+      scanMesh = null
     }
   }
+  const profile = applyProfile(scanMesh ? 'tiny' : 'human') // sizes, speeds and camera distances for this kind of room
+  stage.camera.near = profile.cameraNear
+  stage.camera.far = profile.cameraFar
+  stage.camera.updateProjectionMatrix()
   // Keep the view clear while playing: no furniture labels, and no Start pole sticking through
   // the character. The Goal marker stays, so you can always see where to go.
   stage.scene.traverse((obj) => {
     if (obj.name === OBJECT_LABEL || obj.name === SPAWN_MARKER) obj.visible = false
+    if (obj.name === GOAL_MARKER) obj.scale.setScalar(profile.markerScale)
   })
-  const model = createCharacterModel()
+  const model = await createCharacter() // the player's picture, the default bean, or simple shapes
   stage.scene.add(model)
 
   // ---- Physics ----
@@ -66,7 +73,16 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
   // Spawn and goal sit on the floor (use floor_y, never assume 0).
   const spawnFeet = new THREE.Vector3(world.spawn[0], floorY, world.spawn[2])
   const goal = new THREE.Vector3(world.goal[0], floorY, world.goal[2])
-  const { physics, isWall } = buildPhysicsWorld(world)
+  const { physics, isWall } = buildPhysicsWorld(world, scanMesh ? extractTriangles(scanMesh) : undefined)
+
+  // Stand on whatever is really there: the scan's floor is not exactly at world.json's floor_y (and may be a rug or a step).
+  function groundAt(x: number, z: number, fallbackY: number): number {
+    const reach = Math.max(CHARACTER.height * 3, 0.6)
+    const hit = physics.castRay(new RAPIER.Ray({ x, y: fallbackY + reach, z }, { x: 0, y: -1, z: 0 }), reach * 2, true)
+    return hit ? fallbackY + reach - hit.timeOfImpact : fallbackY
+  }
+  spawnFeet.y = groundAt(spawnFeet.x, spawnFeet.z, spawnFeet.y)
+  goal.y = groundAt(goal.x, goal.z, goal.y)
   const character = createCharacterBody(physics, [spawnFeet.x, spawnFeet.y, spawnFeet.z])
   let motion = newMotionState()
 
@@ -148,7 +164,7 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
       physics.castRay(ray, max, true, undefined, undefined, character.collider, undefined, (c) => isWall(c) === wantWalls)
     const solid = cast(false)
     const wall = cast(true)
-    return Math.min(max, solid ? solid.timeOfImpact : max, wall ? wall.timeOfImpact + CAMERA_WALL_SLACK : max)
+    return Math.min(max, solid ? solid.timeOfImpact : max, wall ? wall.timeOfImpact + profile.cameraWallSlack : max)
   }
 
   let fpsFrames = 0
@@ -205,7 +221,7 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
     // Reached the goal? (measured across the floor, and not from high above it)
     const feetY = currCentre.y - CHARACTER.height / 2
     const across = Math.hypot(currCentre.x - goal.x, currCentre.z - goal.z)
-    if (!finished && across < GOAL_RADIUS && Math.abs(feetY - goal.y) < 1) {
+    if (!finished && across < profile.goalRadius && Math.abs(feetY - goal.y) < profile.goalHeightSlack) {
       finished = true
       winTime.textContent = `Time: ${elapsed.toFixed(1)} seconds`
       win.hidden = false
