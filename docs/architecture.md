@@ -139,6 +139,18 @@ and asks `muse-image-1.0` (`POST /v1/images/edits`) to move only those and keep 
 **Character image** (Z3): `server/scripts/make_character.py` generates an original character from the prompt in
 `docs/character-prompt.md` and saves it to `web/public/assets/character.png` (white background removed). See that doc for status.
 
+## The race (play mode)
+Play mode is a race, generated from the scan, inspired by arcade racers (original shapes and names). Pass **4 checkpoint gates** in order (each adds 8 s) before the **countdown clock** runs out, avoid **rolling spiky hazards** (a hit stuns you
+1 s and costs 3 s; jump over them), grab **item boxes** for power-ups, then **catch the moving flag 3 times**: it wanders while locked, then flees (with a speed burst when you get close, and a short rest every few seconds), reappears far away after each catch,
+and comes back 10% faster. Power-ups (one held at a time, used with E / Shift / the Item button): **Boost** (1.9x speed, 4 s), **Super jump** (about twice the height, 10 s), **Wings** (fly: hold Jump to rise, let go to sink, stops under the ceiling, 6 s),
+**Shield** (blocks one hit, 12 s), **Freeze** (the flag stands still 4 s). Best "seconds to spare" per scan is kept in the browser.
+How it works, in layers (each has its own Node test, no browser needed): `walkGraph.ts` + `probe.ts` find every spot the character can stand on the real scan (rays down through the room) and link spots by walking, jumping up or dropping down;
+`course.ts` plans gates (one on top of furniture whenever something can be climbed), item boxes, hazards across the route, and a flag start far from spawn and gates; `game.ts` is the rules (timer, gates, items, hazards, the flag's brain: it runs to the spot it can reach before you
+can, by walking distance); `gameScene.ts` and `gameHud.ts` draw it; `motion.ts` applies Boost/Super jump/Wings to the movement. If no course can be planned (a room too small or without ground), or the page is opened with `?classic`, it falls back to the old walk-to-the-goal game.
+Debug: `?debug` exposes `window.__rw` (the game, a teleport and the character size) for browser tests; `?colliders` and `?fps` are Zac's. Tests: `node web/scripts/test-course.ts`, `test-game.ts`, `test-tiny-play.ts`.
+**Difficulty (measured with simulated chasers that head straight for the flag):** a slow runner never catches it; a perfect normal-speed runner needs about 17 s for all 3 catches; a Boost makes that about 7 s. Real players on a thumbstick will be slower than the bot, and
+hazards and furniture get in the way, so the time limit (about 25 s + route time + 45 s) is tight but fair. Tune the numbers in `TUNING` in `game.ts`. Not tried by a human on a real phone yet.
+
 ## Character maker (`POST /character`)
 The Character tab on the Results screen lets a player describe a character (3 to 80 characters, e.g. "a sleepy red panda wearing a tiny blue hat"). `web/src/api.ts` `generateCharacter()` posts it; the server (`server/characters.py`) wraps it in a fixed template
 (`server/labelling/character.py`: "an original, friendly game character: {description}. Flat 2D game-art style... plain white background... no text, no logos... must not resemble any existing character, mascot, game or brand"), asks `muse-image-1.0`

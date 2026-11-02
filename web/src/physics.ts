@@ -87,6 +87,7 @@ export function buildPhysicsWorld(world: World, scan?: ScanTriangles): PhysicsRo
   if (scan) {
     // The real scan is the ground. Its furniture is part of it, so the boxes are not needed (and would block the real shapes).
     physics.createCollider(RAPIER.ColliderDesc.trimesh(scan.vertices, scan.indices))
+    physics.step() // rays (castRay) only see colliders after the first step, so ground-finding needs this
     return { physics, isWall: (collider) => walls.has(collider.handle) }
   }
 
@@ -96,6 +97,7 @@ export function buildPhysicsWorld(world: World, scan?: ScanTriangles): PhysicsRo
     const [w, h, d] = obj.size
     addBox(physics, obj.position, [w / 2, h / 2, d / 2], obj.rotation_y)
   }
+  physics.step() // rays (castRay) only see colliders after the first step
   return { physics, isWall: (collider) => walls.has(collider.handle) }
 }
 

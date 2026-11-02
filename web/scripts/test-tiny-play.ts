@@ -1,6 +1,6 @@
 // Offline test of the toy-sized character running on a scan (as raw triangles), with the real Rapier physics. Run: node scripts/test-tiny-play.ts
 import RAPIER from '@dimforge/rapier3d-compat'
-import { newMotionState, stepCharacter } from '../src/motion.ts'
+import { MOVE, newMotionState, stepCharacter, type MoveModifiers } from '../src/motion.ts'
 import { applyProfile, PROFILES } from '../src/profile.ts'
 import { CHARACTER, FIXED_DT, buildPhysicsWorld, createCharacterBody, initPhysics } from '../src/physics.ts'
 import type { World } from '../src/world.ts'
@@ -41,9 +41,9 @@ function newRun(profile: 'tiny' | 'human', start: [number, number, number], with
   return { physics, body, state: newMotionState(), p, feetY: () => body.body.translation().y - CHARACTER.height / 2, pos: () => body.body.translation() }
 }
 type Run = ReturnType<typeof newRun>
-function run(r: Run, seconds: number, wishX: number, wishZ: number, jumpAt: number[] = []) {
+function run(r: Run, seconds: number, wishX: number, wishZ: number, jumpAt: number[] = [], mods?: MoveModifiers) {
   const steps = Math.round(seconds / FIXED_DT)
-  for (let i = 0; i < steps; i++) stepCharacter(r.physics, r.body, r.state, wishX, wishZ, jumpAt.includes(i))
+  for (let i = 0; i < steps; i++) stepCharacter(r.physics, r.body, r.state, wishX, wishZ, jumpAt.includes(i), mods)
 }
 
 // 1. it is toy-sized, and the human size is untouched
@@ -90,6 +90,51 @@ r = newRun('tiny', [2.5, FLOOR, 2.5])
 run(r, 4, tiny.move.runSpeed, tiny.move.runSpeed)
 console.log(`ran into the corner: x=${r.pos().x.toFixed(2)} z=${r.pos().z.toFixed(2)} (walls at 3.00)`)
 check(r.pos().x < 3.01 && r.pos().z < 3.01 && r.feetY() > -0.05, 'walls must hold and the floor must catch you')
+
+// 7b. power-ups change how it moves
+const apex = (jumpMult: number) => {
+  const r = newRun('tiny', [0, FLOOR, 2])
+  let top = 0
+  for (let i = 0; i < 120; i++) {
+    stepCharacter(r.physics, r.body, r.state, 0, 0, i === 0, { jumpSpeedMult: jumpMult, flying: false, flyUp: false })
+    top = Math.max(top, r.feetY() - FLOOR)
+  }
+  return top
+}
+const normalJump = apex(1)
+const springJump = apex(1.45)
+console.log(`jump height: normal ${normalJump.toFixed(2)} m, with Super Jump ${springJump.toFixed(2)} m`)
+check(normalJump > 0.5 && normalJump < 0.6 && springJump > 1.0 && springJump < 1.3, 'Super Jump should roughly double the jump height')
+// fly: hold Jump to rise (past the 1.3 m shelf that cannot be jumped), let go to sink slowly, and come down in the end
+r = newRun('tiny', [-1.3, FLOOR, 0])
+const holdUp: MoveModifiers = { jumpSpeedMult: 1, flying: true, flyUp: true }
+const letGo: MoveModifiers = { jumpSpeedMult: 1, flying: true, flyUp: false }
+run(r, 1.8, 0, 0, [], holdUp)
+const risen = r.feetY()
+run(r, 0.5, 0, 0, [], letGo)
+const sunk = r.feetY()
+console.log(`flying: rose to ${risen.toFixed(2)} m holding Jump; let go for half a second and sank to ${sunk.toFixed(2)} m`)
+check(risen > 1.4, 'Wings: holding Jump rises above the 1.3 m shelf')
+check(sunk < risen && sunk > risen - 0.5, 'Wings: letting go sinks slowly')
+run(r, 6, 0, 0, [], letGo)
+check(r.state.grounded && r.feetY() < FLOOR + 0.05, 'letting go of Jump while flying brings you all the way down')
+r = newRun('tiny', [-1.3, FLOOR, 0])
+run(r, 0.2, 0, 0, [0], { jumpSpeedMult: 1, flying: true, flyUp: false })
+check(r.feetY() < 0.1, 'with Wings, Jump does not also make a normal jump')
+// landing on top of the shelf by flying over it, then wings run out
+r = newRun('tiny', [-1.3, FLOOR, 0])
+run(r, 1.9, 0, 0, [], { jumpSpeedMult: 1, flying: true, flyUp: true })
+run(r, 0.55, -tiny.move.runSpeed, 0, [], { jumpSpeedMult: 1, flying: true, flyUp: true })
+run(r, 2, 0, 0, [])
+console.log(`flew onto the shelf and the wings ran out: feet y=${r.feetY().toFixed(2)} (shelf top is ${(FLOOR + 1.3).toFixed(2)}), x=${r.pos().x.toFixed(2)}`)
+check(Math.abs(r.feetY() - (FLOOR + 1.3)) < 0.05, 'you can land on the shelf after flying over it')
+void MOVE
+
+// 7c. wings stop below the ceiling
+r = newRun('tiny', [-1.3, FLOOR, 0])
+run(r, 5, 0, 0, [], { jumpSpeedMult: 1, flying: true, flyUp: true, flyCeiling: 2.0 })
+console.log(`held Jump for 5 s with a ceiling at 2.0 m: head at ${(r.feetY() + CHARACTER.height).toFixed(2)} m`)
+check(r.feetY() + CHARACTER.height <= 2.0 + 0.05, 'flying must stop at the ceiling')
 
 // 8. with NO scan (the example rooms) the old box-based behaviour is unchanged: person-sized, standing on floor_y
 r = newRun('human', [0, 0, 0], false)

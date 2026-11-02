@@ -1,5 +1,6 @@
-// Play mode: run and jump across the room's real furniture to reach the goal.
-// Draws with the shared stage (stage.ts), moves with Rapier (physics.ts + motion.ts).
+// Play mode: a race across the room's real furniture. Pass the checkpoint gates, dodge the rolling hazards, grab power-ups, then catch the
+// moving flag three times before the time runs out. (If no course can be planned, it falls back to the old "walk to the goal" game.)
+// Draws with the shared stage (stage.ts), moves with Rapier (physics.ts + motion.ts); the rules are in game.ts.
 
 import RAPIER from '@dimforge/rapier3d-compat'
 import * as THREE from 'three'
@@ -7,14 +8,20 @@ import { createCharacter } from './character.ts'
 import { createColliderDebug, type ColliderDebug } from './colliderDebug.ts'
 import { angleDiff, createFollowCamera } from './followCamera.ts'
 import { createInput, hasTouch } from './input.ts'
+import { generateCourse } from './course.ts'
+import { Game, TUNING, ITEM_INFO, type GameEvent } from './game.ts'
+import { createGameScene, type GameScene } from './gameScene.ts'
+import { createRaceHud, type RaceHud } from './gameHud.ts'
 import { MOVE, newMotionState, stepCharacter } from './motion.ts'
 import { CHARACTER, FIXED_DT, buildPhysicsWorld, createCharacterBody, freePhysics, initPhysics } from './physics.ts'
 import { applyProfile } from './profile.ts'
 import { GOAL_MARKER, OBJECT_LABEL, SPAWN_MARKER } from './roomScene.ts'
 import { extractTriangles } from './scanCollider.ts'
 import { loadScanMesh, scanMeshUrl } from './scanMesh.ts'
+import { createProbe } from './probe.ts'
 import { createStage } from './stage.ts'
-import type { World } from './world.ts'
+import { buildGraph, type Graph } from './walkGraph.ts'
+import type { Vec3, World } from './world.ts'
 
 const FALL_LIMIT = 3 // metres below the floor: respawn
 const MAX_STEPS_PER_FRAME = 5 // if the phone stalls, skip ahead rather than freeze
@@ -23,6 +30,9 @@ const MAX_STEPS_PER_FRAME = 5 // if the phone stalls, skip ahead rather than fre
 const params = new URLSearchParams(window.location.search)
 const SHOW_COLLIDERS = params.has('colliders')
 const SHOW_FPS = params.has('fps')
+const CLASSIC = params.has('classic') // the old walk-to-the-goal game, without the race
+const DEBUG = params.has('debug') // exposes window.__rw for tests
+const KNOCKBACK_SECONDS = 0.25
 
 export interface PlayMode {
   dispose: () => void
@@ -100,7 +110,7 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
   const timer = el('div', 'hud-timer', '0.0 s')
   const fps = el('div', 'hud-fps')
   fps.hidden = !SHOW_FPS
-  const hint = el('p', 'hud-hint', 'WASD or arrows to move · Space to jump · drag to look')
+  const hint = el('p', 'hud-hint', 'WASD / arrows move · Space jump (hold to fly) · E use item · drag to look')
   hint.hidden = hasTouch()
   const win = el('div', 'hud-win')
   win.hidden = true
@@ -124,8 +134,7 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
   // ---- Game state ----
   let elapsed = 0 // seconds of play (pauses with the tab)
   let finished = false
-  const facingGoal = () => Math.atan2(goal.x - spawnFeet.x, goal.z - spawnFeet.z)
-  let facing = facingGoal() // which way the character faces (radians around y); start facing the goal
+  let facing = 0 // which way the character faces (radians around y); set properly when the race (or the goal) is known
   let accumulator = 0
   const prevCentre = new THREE.Vector3()
   const currCentre = new THREE.Vector3()
@@ -136,21 +145,143 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
     return out.set(t.x, t.y, t.z)
   }
 
+  // Wings may not take you through the ceiling: stop a little below it (the scan's room is only as tall as its bounds say).
+  const flyCeiling = world.room.bounds.max[1] - CHARACTER.height * 0.5
+
+  // ---- The race ----
+  let graph: Graph | null = null
+  let race: { game: Game; scene: GameScene } | null = null
+  let raceHud: RaceHud | null = null
+  let sceneTime = 0
+  let nextSeed = 1 + Math.floor(Math.random() * 1_000_000)
+  let endShown = false
+  const knock = { x: 0, z: 0, t: 0 } // a short shove away from a hazard that hit you
+  const bestKey = `roomworld.best.${world.source_scan}`
+
+  /** The map of where the character can stand on this scan (built once; the room never changes). */
+  function getGraph(): Graph {
+    if (graph) return graph
+    const { min, max } = world.room.bounds
+    const jumpHeight = MOVE.jumpSpeed ** 2 / (2 * MOVE.gravity)
+    let cell = Math.max(0.08, CHARACTER.radius * 1.6)
+    const area = (max[0] - min[0]) * (max[2] - min[2])
+    while (area / (cell * cell) > 20000) cell *= 1.25 // a big room gets a coarser map, to stay quick
+    graph = buildGraph(createProbe(physics, max[1] + 0.2, CHARACTER.height, character.collider), {
+      min, max, cell, margin: CHARACTER.radius * 1.2, stepUp: CHARACTER.stepHeight, jumpUp: jumpHeight * 0.85,
+    })
+    return graph
+  }
+
+  function readBest(): number | null {
+    try {
+      const value = Number(localStorage.getItem(bestKey))
+      return Number.isFinite(value) && value > 0 ? value : null
+    } catch {
+      return null
+    }
+  }
+
+  /** Plan a new course and start the countdown. Leaves `race` null if this room is too small or cluttered to race in. */
+  function startRace(): void {
+    race?.scene.dispose()
+    race = null
+    endShown = false
+    raceHud?.hideEnd()
+    if (CLASSIC) return
+    const seed = nextSeed++
+    const course = generateCourse(getGraph(), [spawnFeet.x, spawnFeet.y, spawnFeet.z], {
+      seed, checkpoints: 4, hazards: 3, unit: CHARACTER.height, runSpeed: MOVE.runSpeed, elevatedMin: CHARACTER.height * 0.5,
+    })
+    if (!course) return
+    const game = new Game(course, { unit: CHARACTER.height, runSpeed: MOVE.runSpeed, seed })
+    const scene = createGameScene(game, CHARACTER.height)
+    stage.scene.add(scene.group)
+    race = { game, scene }
+    sceneTime = 0
+    stage.scene.traverse((obj) => {
+      if (obj.name === GOAL_MARKER) obj.visible = false // the moving flag replaces the fixed goal pole
+    })
+    raceHud ??= createRaceHud(hud, timer, () => useItem())
+    raceHud.banner(`${course.checkpoints.length} gates, then catch the flag ${TUNING.tagsNeeded} times!`, 'info')
+  }
+
+  function useItem(): void {
+    if (race) handleEvents(race.game.useItem())
+  }
+
+  function handleEvents(events: GameEvent[]): void {
+    if (!raceHud) return
+    for (const e of events) {
+      switch (e.type) {
+        case 'go': raceHud.banner('GO!', 'good'); break
+        case 'checkpoint': raceHud.banner(`Gate ${e.index} of ${e.total}!  +${e.bonus}s`, 'good'); break
+        case 'flagUnlocked': raceHud.banner('All gates passed: now catch the flag!', 'good'); break
+        case 'flagLocked': raceHud.banner('Pass all the gates first!', 'info'); break
+        case 'item': raceHud.banner(`Got ${ITEM_INFO[e.kind].name}!  ${ITEM_INFO[e.kind].blurb}`, 'good'); break
+        case 'itemFull': raceHud.banner('Your hands are full: use your item (E)', 'info'); break
+        case 'use': raceHud.banner(`${ITEM_INFO[e.kind].name}!`, 'good'); break
+        case 'hit':
+          raceHud.banner(e.blocked ? 'Your shield saved you!' : `Ouch! -${TUNING.hitPenalty}s`, e.blocked ? 'good' : 'bad')
+          knock.x = e.dirX
+          knock.z = e.dirZ
+          knock.t = KNOCKBACK_SECONDS
+          break
+        case 'flagTired': raceHud.banner('The flag is tired: now!', 'info'); break
+        case 'tag': if (e.n < e.of) raceHud.banner(`Caught it! ${e.n} of ${e.of}  +${TUNING.tagBonus}s  It runs faster now...`, 'good'); break
+        default: break
+      }
+    }
+  }
+
+  function showRaceEnd(game: Game): void {
+    if (!raceHud) return
+    const gates = game.course.checkpoints.length
+    const lines: string[] = []
+    if (game.phase === 'won') {
+      const best = readBest()
+      const left = Math.round(game.timeLeft * 10) / 10
+      lines.push(`${left} seconds to spare`, `Hits taken: ${game.hits}`)
+      if (best === null || left > best) {
+        lines.push('New best!')
+        try {
+          localStorage.setItem(bestKey, String(left))
+        } catch {
+          // storage blocked: the best just is not remembered
+        }
+      } else {
+        lines.push(`Best: ${best} seconds to spare`)
+      }
+    } else {
+      lines.push(`You passed ${game.cpIndex} of ${gates} gates and caught the flag ${game.tags} of ${TUNING.tagsNeeded} times.`)
+    }
+    raceHud.showEnd({ title: game.phase === 'won' ? 'You caught the flag!' : "Time's up!", lines, onRestart: restartRun, onBack })
+    endShown = true
+  }
+
+  /** Where the character should be facing at the start: towards the first gate, or the goal. */
+  function facingStart(): number {
+    const target = race ? race.game.course.checkpoints[0].pos : ([goal.x, 0, goal.z] as Vec3)
+    return Math.atan2(target[0] - spawnFeet.x, target[2] - spawnFeet.z)
+  }
+
   function respawn(): void {
-    character.body.setTranslation({ x: spawnFeet.x, y: spawnFeet.y + CHARACTER.height / 2, z: spawnFeet.z }, true)
+    const at = race ? race.game.respawnPoint() : ([spawnFeet.x, spawnFeet.y, spawnFeet.z] as Vec3)
+    character.body.setTranslation({ x: at[0], y: at[1] + CHARACTER.height / 2, z: at[2] }, true)
     physics.step() // let the colliders catch up with the teleport
     motion = newMotionState()
     readCentre(prevCentre)
     readCentre(currCentre)
-    model.position.copy(spawnFeet)
-    cam.reset(spawnFeet, facing)
+    model.position.set(at[0], at[1], at[2])
+    cam.reset(new THREE.Vector3(at[0], at[1], at[2]), facing)
   }
 
   function restartRun(): void {
     finished = false
     elapsed = 0
     win.hidden = true
-    facing = facingGoal()
+    startRace()
+    facing = facingStart()
+    knock.t = 0
     respawn()
   }
   restart.addEventListener('click', restartRun)
@@ -171,8 +302,13 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
   let fpsTime = 0
 
   function frame(dt: number): void {
-    const move = finished ? { x: 0, y: 0 } : input.move()
-    const jump = input.takeJump() && !finished
+    const game = race?.game ?? null
+    // What the player may do right now (the race can freeze you: countdown, stun, finished) and what power-ups are active.
+    const mods = game ? game.modifiers() : { speedMult: 1, jumpSpeedMult: 1, flying: false, canMove: !finished }
+    const pressedUse = input.takeUse()
+    if (pressedUse) useItem()
+    const move = mods.canMove ? input.move() : { x: 0, y: 0 }
+    const jump = input.takeJump() && mods.canMove
 
     // Turn the stick/keys (relative to the camera) into a direction in the room.
     const yaw = cam.yaw()
@@ -180,9 +316,16 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
     const fz = -Math.cos(yaw)
     const rx = Math.cos(yaw) // camera's right
     const rz = -Math.sin(yaw)
-    const wishX = (rx * move.x + fx * move.y) * MOVE.runSpeed
-    const wishZ = (rz * move.x + fz * move.y) * MOVE.runSpeed
+    const wantedSpeed = MOVE.runSpeed * mods.speedMult
+    let wishX = (rx * move.x + fx * move.y) * wantedSpeed
+    let wishZ = (rz * move.x + fz * move.y) * wantedSpeed
     const speed = Math.hypot(wishX, wishZ)
+    if (knock.t > 0) {
+      knock.t -= dt
+      wishX += knock.x * MOVE.runSpeed * 1.5 // shoved away from the hazard that hit you
+      wishZ += knock.z * MOVE.runSpeed * 1.5
+    }
+    const modifiers = { jumpSpeedMult: mods.jumpSpeedMult, flying: mods.flying, flyUp: mods.flying && mods.canMove && input.jumpHeld(), flyCeiling: flyCeiling }
 
     // Fixed-rate physics: run as many 1/60 s steps as real time has passed.
     accumulator += dt
@@ -190,12 +333,12 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
     let jumpThisFrame = jump
     while (accumulator >= FIXED_DT && steps < MAX_STEPS_PER_FRAME) {
       prevCentre.copy(currCentre)
-      stepCharacter(physics, character, motion, wishX, wishZ, jumpThisFrame)
+      stepCharacter(physics, character, motion, wishX, wishZ, jumpThisFrame, modifiers)
       jumpThisFrame = false
       readCentre(currCentre)
       accumulator -= FIXED_DT
       steps++
-      if (!finished) elapsed += FIXED_DT
+      if (!finished && !game) elapsed += FIXED_DT
     }
     if (steps === MAX_STEPS_PER_FRAME) accumulator = 0
     if (jumpThisFrame) motion.jumpQueued = MOVE.jumpBuffer // pressed between steps: remember it
@@ -212,22 +355,31 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
     model.rotation.y = facing
 
     // Swing the camera behind only when running away from it (not when running towards it).
-    const runningAway = speed > 0.1 ? Math.max(0, move.y) * (speed / MOVE.runSpeed) + Math.abs(move.x) * 0.5 : 0
+    const runningAway = speed > 0.1 ? Math.max(0, move.y) * (speed / wantedSpeed) + Math.abs(move.x) * 0.5 : 0
     cam.update(dt, drawFeet, facing, runningAway, input.takeLook(), clearDistance)
 
     // Fell out of the world?
     if (currCentre.y - CHARACTER.height / 2 < floorY - FALL_LIMIT) respawn()
 
-    // Reached the goal? (measured across the floor, and not from high above it)
     const feetY = currCentre.y - CHARACTER.height / 2
-    const across = Math.hypot(currCentre.x - goal.x, currCentre.z - goal.z)
-    if (!finished && across < profile.goalRadius && Math.abs(feetY - goal.y) < profile.goalHeightSlack) {
-      finished = true
-      winTime.textContent = `Time: ${elapsed.toFixed(1)} seconds`
-      win.hidden = false
-      restart.focus({ preventScroll: true })
+    if (game && race && raceHud) {
+      // The race: tell the rules where the player is, and show what happened.
+      handleEvents(game.update(dt, [currCentre.x, feetY, currCentre.z]))
+      sceneTime += dt
+      race.scene.update(game, drawFeet, sceneTime, stage.camera)
+      raceHud.update(game)
+      if ((game.phase === 'won' || game.phase === 'lost') && !endShown) showRaceEnd(game)
+    } else {
+      // The old game: reached the goal? (measured across the floor, and not from high above it)
+      const across = Math.hypot(currCentre.x - goal.x, currCentre.z - goal.z)
+      if (!finished && across < profile.goalRadius && Math.abs(feetY - goal.y) < profile.goalHeightSlack) {
+        finished = true
+        winTime.textContent = `Time: ${elapsed.toFixed(1)} seconds`
+        win.hidden = false
+        restart.focus({ preventScroll: true })
+      }
+      timer.textContent = `${elapsed.toFixed(1)} s`
     }
-    timer.textContent = `${elapsed.toFixed(1)} s`
 
     debug?.update()
 
@@ -242,13 +394,31 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
     }
   }
 
+  startRace()
+  facing = facingStart()
   respawn()
+  if (DEBUG) {
+    // For tests: look at the race and move the player around.
+    ;(window as unknown as Record<string, unknown>).__rw = {
+      game: () => race?.game ?? null,
+      teleport: (x: number, y: number, z: number) => {
+        character.body.setTranslation({ x, y: y + CHARACTER.height / 2, z }, true)
+        physics.step()
+        readCentre(prevCentre)
+        readCentre(currCentre)
+      },
+      profile: () => ({ unit: CHARACTER.height, runSpeed: MOVE.runSpeed }),
+    }
+  }
   stage.setLoop(frame)
 
   return {
     dispose: () => {
       stage.setLoop(null)
       input.dispose()
+      raceHud?.dispose()
+      race?.scene.dispose()
+      if (DEBUG) delete (window as unknown as Record<string, unknown>).__rw
       container.removeEventListener('contextmenu', noMenu)
       hud.remove()
       stage.dispose() // frees the room, character and debug lines
