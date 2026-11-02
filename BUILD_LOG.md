@@ -12,6 +12,12 @@ Add a new entry at the TOP after each work session. Copy the template.
 - Next:
 ```
 
+## 2026-11-02 - Aluinn (bigger example room)
+- What I did: The example room used for Game mode is now much bigger (about 14 x 12 m, 14 objects, extra sofa, shelves, table, crates and ottoman to climb on), built in `web/src/bigExample.ts` from the shared example, so `shared/example_world.json` is unchanged and the server tests still use it. Nothing can hit you for 3 seconds after GO, a hit gives 2.5 s of safety, and the camera for the person-sized character sits further back (6.5 m) so the hazards can be seen coming. Work mode keeps the small original example.
+- What worked / what didn't: A browser run showed the bigger room racing with a 32 m route, and standing still for 30 s lost no lives.
+- AI tools used (and for what): Claude Code.
+- Next: Play-test the big room; tune hazard count and speed if it is still too hard.
+
 ## 2026-11-02 - Aluinn (depth cues and drawing animation)
 - What I did: Soft shadows on the floor under the rolling balls and under the floating item boxes, a ring on the floor under every gate (it pulses on the next gate) and a ring under each item box, so it is easier to see where things really are in 3D. In the Character panel, a pencil now draws a little character on lined paper (looping, 8 s) while the real picture is being generated, then the finished picture replaces it.
 - What worked / what didn't: Checked with browser screenshots (shadows, rings, and frames of the pencil animation with the server request held open). Not yet seen with a real generated picture on the live site.
