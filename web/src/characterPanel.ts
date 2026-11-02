@@ -2,6 +2,7 @@
 // The picture is kept in this browser only (characterStore.ts); play mode reads it when it starts.
 
 import { ApiError, generateCharacter } from './api.ts'
+import { createSketch } from './sketch.ts'
 import { characterPictureUrl, clearCustomCharacter, getCustomCharacter, saveCustomCharacter } from './characterStore.ts'
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
@@ -25,6 +26,8 @@ export function openCharacterPanel(): () => void {
     preview.src = characterPictureUrl()
   }
   showCurrent()
+  const sketch = createSketch() // a pencil drawing, shown in place of the picture while it is being made
+  sketch.hidden = true
 
   const hint = el('p', 'character-hint', 'Describe an original character: no existing characters or brands. It takes about 20 seconds.')
   const input = el('input', 'character-input')
@@ -52,6 +55,8 @@ export function openCharacterPanel(): () => void {
     draw.disabled = true
     status.className = 'character-status'
     status.textContent = 'Drawing your character… about 20 seconds.'
+    preview.hidden = true
+    sketch.hidden = false
     try {
       saveCustomCharacter(await generateCharacter(input.value))
       showCurrent()
@@ -63,6 +68,8 @@ export function openCharacterPanel(): () => void {
     } finally {
       drawing = false
       draw.disabled = false
+      sketch.hidden = true
+      preview.hidden = false
     }
   }
   draw.addEventListener('click', () => void run())
@@ -90,7 +97,7 @@ export function openCharacterPanel(): () => void {
     if (e.target === backdrop) closePanel()
   })
 
-  panel.append(title, preview, hint, input, buttons, status, close)
+  panel.append(title, preview, sketch, hint, input, buttons, status, close)
   backdrop.append(panel)
   document.body.append(backdrop)
   input.focus()

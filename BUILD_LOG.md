@@ -12,6 +12,12 @@ Add a new entry at the TOP after each work session. Copy the template.
 - Next:
 ```
 
+## 2026-11-02 - Aluinn (depth cues and drawing animation)
+- What I did: Soft shadows on the floor under the rolling balls and under the floating item boxes, a ring on the floor under every gate (it pulses on the next gate) and a ring under each item box, so it is easier to see where things really are in 3D. In the Character panel, a pencil now draws a little character on lined paper (looping, 8 s) while the real picture is being generated, then the finished picture replaces it.
+- What worked / what didn't: Checked with browser screenshots (shadows, rings, and frames of the pencil animation with the server request held open). Not yet seen with a real generated picture on the live site.
+- AI tools used (and for what): Claude Code wrote the code and the SVG drawing (our own, nothing downloaded).
+- Next: Play-test; tune ring and shadow sizes if they get in the way.
+
 ## 2026-11-02 - Aluinn (smoother play)
 - What I did: Removed fall damage (lives are only lost to rolling hazards; falling off the scan just puts you back at the last gate). Smoother movement: the character now speeds up and slows down over about a tenth of a second instead of snapping, steers a bit less sharply in the air, and loses its speed when it hits a wall. Added a soft shadow under the character that shows where you will land (the 2D-picture-in-3D-room depth problem) and raised the default camera angle a little so jumps are easier to judge.
 - What worked / what didn't: Rules, course, camera and physics tests pass; a browser run showed the shadow under a jump. Not yet tried by a person: tune `groundAccel`, `groundBrake`, `airAccel` in `web/src/motion.ts`, and the camera `pitch` in `profile.ts`.

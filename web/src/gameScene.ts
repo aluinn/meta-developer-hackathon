@@ -74,6 +74,24 @@ function label(text: string, color: string): THREE.Sprite {
 const basic = (color: number, opacity = 1, extra: THREE.MeshBasicMaterialParameters = {}) =>
   new THREE.MeshBasicMaterial({ color, transparent: opacity < 1, opacity, ...extra })
 
+/** A flat dark disc that lies on the surface under something, showing where it is (and where it would land). */
+function shadowDisc(radius: number): THREE.Mesh {
+  const material = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.4, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })
+  const disc = new THREE.Mesh(new THREE.CircleGeometry(1, 24), material)
+  disc.rotation.x = -Math.PI / 2
+  disc.scale.setScalar(radius)
+  disc.renderOrder = 2
+  return disc
+}
+
+/** A flat ring on the surface, drawn on top of the picture of the room so it can always be seen. */
+function floorRing(inner: number, outer: number, color: number, opacity: number): THREE.Mesh {
+  const ring = new THREE.Mesh(new THREE.RingGeometry(inner, outer, 40), basic(color, opacity, { side: THREE.DoubleSide, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }))
+  ring.rotation.x = -Math.PI / 2
+  ring.renderOrder = 3
+  return ring
+}
+
 export function createGameScene(game: Game, s: number): GameScene {
   const group = new THREE.Group()
   group.name = 'race'
@@ -83,8 +101,8 @@ export function createGameScene(game: Game, s: number): GameScene {
     const gate = new THREE.Group()
     const ring = new THREE.Mesh(new THREE.TorusGeometry(0.62 * s, 0.07 * s, 8, 32), basic(COLOR.gateFuture, 0.5, { side: THREE.DoubleSide }))
     ring.position.y = 0.7 * s
-    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.5 * s, 0.5 * s, 0.03 * s, 28), basic(COLOR.gateFuture, 0.5))
-    base.position.y = 0.015 * s
+    const base = floorRing(0.44 * s, 0.58 * s, COLOR.gateFuture, 0.5) // the ring on the floor under the gate: stand inside it to pass
+    base.position.y = 0.01 * s
     const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.06 * s, 0.06 * s, 5 * s, 8, 1, true), basic(COLOR.gateNext, 0.3, { side: THREE.DoubleSide, depthWrite: false }))
     beam.position.y = 2.5 * s
     const number = label(String(i + 1), '#22d3ee')
@@ -93,27 +111,39 @@ export function createGameScene(game: Game, s: number): GameScene {
     gate.add(ring, base, beam, number)
     gate.position.fromArray(cp.pos)
     group.add(gate)
-    return { gate, ring, base, beam }
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(0.44 * s, 32), basic(COLOR.gateFuture, 0.14, { depthWrite: false })) // a faint fill inside the floor ring
+    disc.rotation.x = -Math.PI / 2
+    disc.position.y = 0.008 * s
+    gate.add(disc)
+    return { gate, ring, base, beam, disc }
   })
 
   // ---- item boxes ----
   const boxes = game.items.map((box) => {
     const holder = new THREE.Group()
     const cube = new THREE.Mesh(new THREE.BoxGeometry(0.4 * s, 0.4 * s, 0.4 * s), basic(COLOR.item, 0.9))
+    const ground = shadowDisc(0.3 * s)
+    const groundRing = floorRing(0.32 * s, 0.4 * s, COLOR.item, 0.55)
     const mark = label('?', '#fbbf24')
     mark.scale.setScalar(0.42 * s)
     mark.position.y = 0.5 * s // above the cube, where it can be seen
     holder.add(cube, mark)
     holder.position.fromArray(box.pos)
     group.add(holder)
-    return { holder, cube }
+    for (const o of [ground, groundRing]) { // these stay on the surface while the cube floats above them
+      o.position.set(box.pos[0], box.pos[1] + 0.006 * s, box.pos[2])
+      group.add(o)
+    }
+    return { holder, cube, ground, groundRing }
   })
 
   // ---- hazards ----
   const hazards = game.hazards.map((h) => {
     const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(h.def.radius, 0), new THREE.MeshStandardMaterial({ color: COLOR.hazard, emissive: 0x7f1d1d, flatShading: true }))
     group.add(ball)
-    return ball
+    const shadow = shadowDisc(h.def.radius * 1.25)
+    group.add(shadow)
+    return { ball, shadow }
   })
 
   // ---- the flag ----
@@ -170,11 +200,12 @@ export function createGameScene(game: Game, s: number): GameScene {
         const state = i < g.cpIndex ? 'done' : i === g.cpIndex ? 'next' : 'future'
         const color = state === 'done' ? COLOR.gateDone : state === 'next' ? COLOR.gateNext : COLOR.gateFuture
         const opacity = state === 'next' ? 0.95 : state === 'done' ? 0.3 : 0.4
-        for (const m of [it.ring, it.base]) {
+        for (const m of [it.ring, it.base, it.disc]) {
           const material = m.material as THREE.MeshBasicMaterial
           material.color.setHex(color)
-          material.opacity = opacity
+          material.opacity = m === it.disc ? opacity * 0.3 : opacity
         }
+        it.base.scale.setScalar(state === 'next' ? pulse : 1)
         it.beam.visible = state === 'next'
         it.ring.rotation.y = time * (state === 'next' ? 1.6 : 0.4)
         it.ring.scale.setScalar(state === 'next' ? pulse : 1)
@@ -182,12 +213,16 @@ export function createGameScene(game: Game, s: number): GameScene {
       boxes.forEach((b, i) => {
         const item = g.items[i]
         b.holder.visible = item.active
+        b.ground.visible = b.groundRing.visible = item.active
+        const bob = Math.sin(time * 2.4 + i)
+        b.ground.scale.setScalar(0.3 * s * (1 - bob * 0.12)) // the shadow shrinks as the cube rises
         b.holder.position.set(item.pos[0], item.pos[1] + (0.42 + Math.sin(time * 2.4 + i) * 0.05) * s, item.pos[2])
         b.cube.rotation.y = time * 1.5
         b.cube.rotation.x = time * 0.9
       })
-      hazards.forEach((ball, i) => {
+      hazards.forEach(({ ball, shadow }, i) => {
         const h = g.hazards[i]
+        shadow.position.set(h.pos[0], h.pos[1] + 0.006 * s, h.pos[2])
         ball.position.set(h.pos[0], h.pos[1] + h.def.radius, h.pos[2])
         ball.rotation.x = time * 4 * h.dir
         ball.rotation.z = time * 2
