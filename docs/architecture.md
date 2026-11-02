@@ -1,7 +1,8 @@
 # Architecture
 
-How Room world fits together. Status as of 2026-11-01: **A1 to A6 are built on `aluinn/start` and tested offline
-only.** The real Meta calls (SAM, Muse Spark, Voice Transcribe) have not been run yet (no API key was available).
+How Room world fits together. Status as of 2026-11-02: **A1 to A6 are built.** Proven on a real scan (a small bathroom, `shared/real_world_01.json`): A1 upload, A2 SAM labelling
+(real SAM call, 29 s) and A3 roles (real Muse Spark call, 8 s). Image generation (the character) is proven too. **Not yet run for real:** `/layout`,
+`/render`, `/transcribe`, `/score` (all tested offline with fakes only).
 
 ## The big picture
 
@@ -47,8 +48,8 @@ API keys stay on the server (`MODEL_API_KEY` in `.env`, git-ignored). The browse
 | Task | Endpoint | What it does | Needs key | Status |
 |---|---|---|---|---|
 | A1 | `POST /scan` | upload .glb/.obj (max 100MB), save, simplify, return `scan_id` + triangle counts | no | tested with generated meshes |
-| A2 | `POST /scan/{scan_id}/label` | 8 virtual cameras, SAM 3.1 per view per prompt, project masks to 3D, vote, bounding boxes | yes (`sam-3.1`) | geometry/voting tested with a fake SAM; **real SAM call untested** |
-| A3 | `POST /scan/{scan_id}/world` | Muse Spark assigns roles, builds and validates `world.json` | yes (`muse-spark-1.3`) | tested with a fake model; **real call untested** |
+| A2 | `POST /scan/{scan_id}/label` | 8 virtual cameras, SAM 3.1 per view per prompt, project masks to 3D, vote, bounding boxes | yes (`sam-3.1`) | geometry/voting tested with a fake SAM; real SAM call proven on the bathroom scan |
+| A3 | `POST /scan/{scan_id}/world` | Muse Spark assigns roles, builds and validates `world.json` | yes (`muse-spark-1.3`) | real Muse Spark call proven on the bathroom scan |
 | A3 | `GET /world/{scan_id}` | returns the saved `world.json` | no | tested |
 | A4 | `POST /transcribe` | browser audio -> transcript | yes (`muse-voice-transcribe-1.0`) | conversion and request format tested; **real call untested** |
 | A4 | `POST /layout` | goal text + world -> new valid `world.json` + a reason per change | yes (`muse-spark-1.3`) | validation/retry tested with a scripted stand-in; **real model untested** |
@@ -165,6 +166,8 @@ We use **standard mode**, not `-contributor`, because contributor mode lets Meta
 Credits are $150 per person; each person claims their own.
 
 ## Known limits (say these in the demo)
+- A2 only finds what we ask SAM to look for (`prompts` in `POST /scan/{id}/label`; default is living-room furniture). A bathroom needs `["toilet", "sink", ...]`.
+- A real scan's mesh is patchy, so A2 merges same-label patches whose boxes come within 5 cm. Two separate same-label objects touching each other would merge into one.
 - Phone LiDAR sizes are approximate; all measurements are estimates.
 - A2's boxes are axis-aligned, so rotated furniture gets a looser box.
 - SAM sees colour renders of a simplified mesh, so it may miss small or dark objects.

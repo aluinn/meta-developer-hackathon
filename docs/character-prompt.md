@@ -3,8 +3,8 @@
 The play-mode character for Zac (Z3). `server/scripts/make_character.py` reads the prompt below, so what is written here
 is exactly what gets sent to Muse Image (`muse-image-1.0`, `POST /v1/images/generations`).
 
-**Status:** prompt written, image **not generated yet** (needs `MODEL_API_KEY`). When it is generated, the script writes
-`web/public/assets/character.png` and fills in the log at the bottom of this file.
+**Status:** generated on 2026-11-02 (first attempt kept). `web/public/assets/character.png` is 512x512 with a transparent background.
+To make a different one, edit the prompt below and run `python scripts/make_character.py` again (about $0.01; results vary each time).
 
 ## Prompt
 
@@ -29,4 +29,5 @@ Generated with Meta's model during the hackathon from the prompt above. Check Me
 (see `THIRD_PARTY.md`). Never edit in artwork from another source without recording its licence.
 
 ## Generation log
-_Not generated yet._
+
+- 2026-11-02: generated with `muse-image-1.0`, 1600x1600, first attempt kept; shrunk to 512x512 (the full-size version is not in the repo), saved to `web/public/assets/character.png`.

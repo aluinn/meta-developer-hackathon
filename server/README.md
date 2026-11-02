@@ -54,6 +54,10 @@ Test the geometry and voting offline (no API calls, no key needed):
 
     python scripts/test_labelling_synthetic.py
 
+`POST /scan/{scan_id}/label` takes an optional JSON body to choose what to look for, e.g.
+`{"prompts": ["toilet", "sink", "bathtub"]}` (short noun phrases, up to 16; default is living-room furniture).
+Every SAM mask is saved, so `python scripts/revote.py scans/<scan_id>` redoes the 3D voting for free if you change the voting code.
+
 ## Make a world.json (A3)
 
 After labelling, `POST /scan/{scan_id}/world` shows the labelled views to Muse Spark

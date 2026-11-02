@@ -3,9 +3,11 @@ import re
 
 from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 
 from labelling.pipeline import label_scan
 from labelling.roles import MuseSparkClient
+from labelling.types import PROMPTS
 from labelling.sam import MissingApiKey, SamClient
 from labelling.world import build_world
 from scans import SCANS_DIR
@@ -21,8 +23,12 @@ def _scan_dir(scan_id: str):
     return SCANS_DIR / scan_id
 
 
+class LabelRequest(BaseModel):
+    prompts: list[str] = Field(default_factory=lambda: list(PROMPTS), min_length=1, max_length=16, description='What to look for, as short noun phrases, e.g. ["toilet", "sink", "bathtub"]. Default: living-room furniture.')
+
+
 @router.post("/scan/{scan_id}/label")
-async def label(scan_id: str) -> dict:
+async def label(scan_id: str, req: LabelRequest | None = None) -> dict:
     scan_dir = _scan_dir(scan_id)
     if not (scan_dir / "simplified.glb").exists():
         raise HTTPException(404, "No such scan. Upload it with POST /scan first.")
@@ -30,7 +36,10 @@ async def label(scan_id: str) -> dict:
         sam = SamClient()
     except MissingApiKey as exc:
         raise HTTPException(503, str(exc)) from exc
-    return await label_scan(scan_dir, sam, labeller_name="sam-3.1")
+    prompts = [p.strip().lower() for p in (req.prompts if req else PROMPTS) if p.strip()]
+    if not prompts or any(len(p) > 40 or "__" in p for p in prompts):
+        raise HTTPException(422, "Prompts must be short noun phrases (max 40 characters).")
+    return await label_scan(scan_dir, sam, labeller_name="sam-3.1", prompts=prompts)
 
 
 @router.post("/scan/{scan_id}/world")
