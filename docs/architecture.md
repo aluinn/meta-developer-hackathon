@@ -33,6 +33,14 @@ flowchart LR
 `shared/world.schema.json` is the handover. The server produces `world.json`; the web app only ever reads it.
 Both sides can be built in parallel because `shared/example_world.json` is a valid stand-in.
 
+## How the website uses the server
+Choosing a scan file on the Upload screen runs `web/src/api.ts` `processScan()`: `POST /scan` (multipart field `file`), then
+`POST /scan/{id}/label` (no body: the server's broad default prompts), then `POST /scan/{id}/world`, then `GET /world/{id}`, and the world.json that comes back is
+shown by the existing viewer. The Loading screen shows a message before each step; failures become plain-English messages on the Upload screen
+(wrong file type, over 100 MB, unreadable file, no furniture found, AI service problem, server unreachable). Addresses are relative (`/scan`), so it works the same on
+the deployed site and, via the proxy in `web/vite.config.ts`, under `npm run dev`. One scan takes about 45 seconds and costs about $0.25 in Meta credits.
+Not yet connected: Layout tab (`/layout`), voice (`/transcribe`), before/after (`/render`) and the score (`/score`). Test: `node web/scripts/test-api.ts`.
+
 ## The principle: models propose, code checks
 
 Every Meta model call goes through our own validation before anything reaches the user or the web app:

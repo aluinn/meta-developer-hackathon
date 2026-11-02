@@ -13,8 +13,8 @@ cd ../server && uvicorn main:app --port 8000     # then open http://localhost:80
 ```
 (If `web/dist` doesn't exist the server just runs the API alone.) Because the page and the API come from the same address:
 - **No CORS needed** in production. `ALLOWED_ORIGINS` only matters while developing with `npm run dev` (page on :5173, API on :8000).
-- **Zac's code should call the API with relative paths**, e.g. `fetch('/layout', ...)`, never `http://localhost:8000/layout`. In development, add a
-  proxy in `web/vite.config.ts` (`server: { proxy: { '/scan': 'http://localhost:8000', '/world': ..., '/layout': ..., '/render': ..., '/transcribe': ..., '/score': ... } }`) so the same relative paths work on :5173.
+- **The web app calls the API with relative paths**, e.g. `fetch('/layout', ...)`, never `http://localhost:8000/layout`. The proxy in `web/vite.config.ts` already forwards
+  `/scan`, `/world`, `/layout`, `/render`, `/transcribe`, `/score` and `/health` to port 8000 under `npm run dev`, so the same relative paths work on :5173. New code (`/layout`, voice, render) should use the same pattern as `web/src/api.ts`.
 - **No separate Vercel deploy is needed.** Render serves the site too.
 
 ## Options
