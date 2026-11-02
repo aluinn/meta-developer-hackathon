@@ -13,6 +13,7 @@ export interface ScreenHandlers {
   /** Only passed in development builds; adds a "Use test room" button. */
   onUseTestRoom?: () => void
   onStartOver: () => void
+  onPlay: () => void
 }
 
 export interface Screens {
@@ -23,6 +24,10 @@ export interface Screens {
   setResultsSummary: (title: string, detail: string) => void
   /** The empty box on the Results screen that the 3D viewer draws into. */
   viewContainer: HTMLElement
+  /** Switch the Results screen in or out of full-screen play mode. */
+  setPlaying: (playing: boolean) => void
+  /** Show a short message over the 3D view (empty text hides it). */
+  setViewMessage: (message: string) => void
 }
 
 /** Small helper: make an element with a class and text (text is never treated as HTML). */
@@ -109,28 +114,34 @@ function buildResults(h: ScreenHandlers) {
   // The 3D viewer (viewer.ts) puts its canvas in here; the legend floats on top.
   const view = el('div', 'view-area')
   view.id = 'view-area'
-  view.append(buildLegend())
+  const message = el('p', 'view-message')
+  message.setAttribute('role', 'status')
+  view.append(buildLegend(), message)
 
-  // Tabs only change which one looks selected for now; they do nothing else yet.
+  // Play enters play mode. Layout does nothing yet (a later task).
   const tabs = el('div', 'tabbar')
   tabs.setAttribute('role', 'tablist')
   const tabButtons = new Map<TabName, HTMLButtonElement>()
-  const makeTab = (name: TabName, label: string) => {
+  const makeTab = (name: TabName, label: string, onClick: () => void) => {
     const b = el('button', 'tab', label)
     b.type = 'button'
     b.setAttribute('role', 'tab')
-    b.addEventListener('click', () => {
-      for (const [n, btn] of tabButtons) btn.setAttribute('aria-selected', String(n === name))
-    })
+    b.setAttribute('aria-selected', 'false')
+    b.addEventListener('click', onClick)
     tabButtons.set(name, b)
     return b
   }
-  tabs.append(makeTab('play', 'Play'), makeTab('layout', 'Layout'))
-  tabButtons.get('play')?.setAttribute('aria-selected', 'true')
-  tabButtons.get('layout')?.setAttribute('aria-selected', 'false')
+  tabs.append(
+    makeTab('play', 'Play', h.onPlay),
+    makeTab('layout', 'Layout', () => {}),
+  )
 
   section.append(header, view, tabs)
-  return { section, heading, detail, view }
+  const setPlaying = (playing: boolean) => {
+    section.classList.toggle('playing', playing)
+    tabButtons.get('play')?.setAttribute('aria-selected', String(playing))
+  }
+  return { section, heading, detail, view, message, setPlaying }
 }
 
 export function createScreens(root: HTMLElement, handlers: ScreenHandlers): Screens {
@@ -164,6 +175,10 @@ export function createScreens(root: HTMLElement, handlers: ScreenHandlers): Scre
       loading.status.textContent = message
     },
     viewContainer: results.view,
+    setPlaying: results.setPlaying,
+    setViewMessage: (text) => {
+      results.message.textContent = text
+    },
     setResultsSummary: (title, detail) => {
       results.heading.textContent = title
       results.detail.textContent = detail

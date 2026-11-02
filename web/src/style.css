@@ -357,3 +357,194 @@ p:focus {
     line-height: 1.3;
   }
 }
+
+/* ---- Messages over the 3D view ---- */
+
+.view-message {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 85%;
+  padding: 0.6rem 1rem;
+  border-radius: 0.6rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  text-align: center;
+  pointer-events: none;
+}
+
+.view-message:empty {
+  display: none;
+}
+
+/* ---- Play mode: the 3D view fills the whole screen ---- */
+
+.screen-results.playing {
+  padding: 0;
+  gap: 0;
+  max-width: none;
+}
+
+.screen-results.playing .results-header,
+.screen-results.playing .tabbar,
+.screen-results.playing .legend {
+  display: none;
+}
+
+.screen-results.playing .view-area {
+  border: 0;
+  border-radius: 0;
+}
+
+/* Nothing in play mode can be selected, long-pressed or used to scroll/zoom the page. */
+.screen-results.playing,
+.play-hud {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
+}
+
+.play-hud {
+  /* Distance from each edge, kept clear of the notch, rounded corners and home bar. */
+  --edge-top: max(0.75rem, env(safe-area-inset-top));
+  --edge-right: max(0.75rem, env(safe-area-inset-right));
+  --edge-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  --edge-left: max(0.75rem, env(safe-area-inset-left));
+  position: absolute;
+  inset: 0;
+  pointer-events: none; /* only the buttons below catch touches; the rest goes to the 3D view */
+}
+
+.play-hud .btn,
+.stick,
+.jump-btn {
+  pointer-events: auto;
+}
+
+.hud-back {
+  position: absolute;
+  top: var(--edge-top);
+  left: var(--edge-left);
+  background: var(--panel);
+}
+
+.hud-timer,
+.hud-fps {
+  position: absolute;
+  top: var(--edge-top);
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  background: rgba(20, 24, 34, 0.75);
+  color: #ffffff;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.hud-timer {
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 0.4rem;
+}
+
+.hud-fps {
+  right: var(--edge-right);
+  margin-top: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.hud-hint {
+  position: absolute;
+  bottom: var(--edge-bottom);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 90%;
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  background: rgba(20, 24, 34, 0.75);
+  color: #ffffff;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.hud-win {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(20rem, 85%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.5rem;
+  border-radius: 1rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  text-align: center;
+  pointer-events: auto;
+}
+
+.hud-win h2 {
+  margin: 0;
+  font-size: 1.6rem;
+}
+
+/* ---- Touch controls ---- */
+
+.stick {
+  position: absolute;
+  left: calc(var(--edge-left) + 0.5rem);
+  bottom: calc(var(--edge-bottom) + 0.5rem);
+  width: 8rem;
+  height: 8rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  display: grid;
+  place-items: center;
+  touch-action: none;
+}
+
+.stick-knob {
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.jump-btn {
+  position: absolute;
+  right: calc(var(--edge-right) + 0.5rem);
+  bottom: calc(var(--edge-bottom) + 1rem);
+  width: 6rem;
+  height: 6rem;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  background: var(--accent);
+  color: var(--accent-text);
+  font: inherit;
+  font-weight: 700;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.jump-btn:active {
+  transform: scale(0.94);
+}
+
+/* Short screens (phone held sideways): slightly smaller controls. */
+@media (max-height: 500px) {
+  .stick {
+    width: 6.5rem;
+    height: 6.5rem;
+  }
+
+  .jump-btn {
+    width: 5rem;
+    height: 5rem;
+  }
+}
