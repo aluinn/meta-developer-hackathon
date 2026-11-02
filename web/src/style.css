@@ -1934,3 +1934,21 @@ body[data-mode='work'] .screen-loading .spinner { border-color: rgba(8, 102, 255
 .proposal > .btn { margin-top: 0.5rem; }
 .proposal-phone-hint { display: none; margin: 0 0 0.5rem; color: var(--muted); font-size: 0.85rem; }
 @media (max-width: 700px), (max-height: 500px) { .proposal-phone-hint { display: block; } }
+
+/* ---- Clearance: PASS / FAIL and Before / After ---- */
+
+.clearance-verdict {
+  margin: 0.5rem 0;
+  padding: 0.6rem 0.8rem;
+  border-left: 0.35rem solid var(--border);
+  border-radius: 0.4rem;
+  background: var(--bg);
+  font-weight: 700;
+  line-height: 1.35;
+}
+.clearance-verdict.is-pass { border-left-color: var(--ok); }
+.clearance-verdict.is-fail { border-left-color: var(--bad); }
+.clearance-compare { margin: 0.25rem 0 0.5rem; }
+.clearance-compare-line { margin: 0 0 0.4rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.clearance-compare .proposal-toggle { margin-bottom: 0; }
+.clearance-compare .proposal-toggle .btn[aria-pressed='true'] { background: var(--accent); color: var(--accent-text); }

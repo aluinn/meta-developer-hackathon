@@ -78,6 +78,11 @@ function proposalState(): ProposalState | null {
   return proposal || changed ? { result: proposal, showing, canReset: changed, hasScan: world !== null && scanMeshUrl(world) !== null } : null
 }
 
+/** What the clearance panel compares: the current room against the proposal (null when there is no proposal). */
+function compareState(): { before: World; after: World; showing: 'before' | 'after' } | null {
+  return proposal && world ? { before: world, after: proposal.world, showing } : null
+}
+
 /** Draw whatever should be on screen now: the room, the scan (only for the room as loaded: it cannot move), the pink changes, the panels. */
 function applyView(): void {
   const shown = viewedWorld()
@@ -90,6 +95,7 @@ function applyView(): void {
   if (proposal) changeOverlay.show(proposal.changes, proposal.world.objects, showing)
   else changeOverlay.show([], [], 'before')
   clearance?.setWorld(shown)
+  clearance?.setCompare(compareState())
   layout?.setProposal(proposalState())
 }
 
@@ -131,7 +137,10 @@ function toggleLayout(): void {
   if (layoutOpen) {
     layout ??= createLayoutPanel(screens.layoutContainer, mode === 'work' ? rearrangeHooks : undefined)
     layout.setProposal(proposalState())
-    if (viewer) clearance ??= createClearancePanel(screens.layoutContainer, viewer, viewedWorld() ?? world)
+    if (viewer) {
+      clearance ??= createClearancePanel(screens.layoutContainer, viewer, viewedWorld() ?? world, rearrangeHooks.setShowing)
+      clearance.setCompare(compareState())
+    }
   } else {
     layout?.stopRecording() // closing the panel must not leave the microphone on
   }
@@ -202,7 +211,7 @@ const screens = createScreens(root, {
 
   // Development only: the production build leaves this out.
   onUseTestRoom: import.meta.env.DEV ? () => openWorld('Test room', loadTestWorld, 'game') : undefined,
-  onUseGapTestRoom: import.meta.env.DEV ? () => openWorld('Narrow-gap test room', loadClearanceTestWorld, 'game') : undefined,
+  onUseGapTestRoom: import.meta.env.DEV ? () => openWorld('Narrow-gap test room', loadClearanceTestWorld, 'work') : undefined, // Work mode: that is where Rearrange and Before / After live
 
   onPlay: () => void enterPlay(),
 
