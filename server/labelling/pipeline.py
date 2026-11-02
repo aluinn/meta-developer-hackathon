@@ -8,6 +8,7 @@ import numpy as np
 import trimesh
 from PIL import Image
 
+from .meshio import load_mesh
 from .render import Camera, View, make_cameras, render_view, vertex_colors_from_original
 from .types import PROMPTS, Detection, Segmenter
 from .vote import group_objects, vote_faces
@@ -24,7 +25,7 @@ def load_mesh_and_colours(scan_dir: Path) -> tuple[trimesh.Trimesh, np.ndarray, 
     original_path = next(scan_dir.glob("original.*"), None)
     colors, colour_source = np.full((len(mesh.vertices), 3), 170, dtype=np.uint8), "none"
     if original_path is not None:
-        original = trimesh.load(original_path, force="mesh")
+        original = load_mesh(original_path)
         colors, colour_source = vertex_colors_from_original(mesh, original)
     return mesh, colors, colour_source
 
