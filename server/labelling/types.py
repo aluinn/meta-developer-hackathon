@@ -3,7 +3,9 @@ from typing import Protocol
 
 import numpy as np
 
-PROMPTS = ["sofa", "bookshelf", "table", "chair", "rug", "door", "bed", "desk"]
+# What A2 asks SAM to look for when the caller does not say. One broad list for living rooms, bedrooms and bathrooms,
+# because the website cannot ask the user what kind of room it is. 12 prompts x 8 views = 96 SAM calls (about $0.24, about a minute).
+PROMPTS = ["sofa", "armchair", "chair", "table", "desk", "bed", "rug", "door", "bookshelf", "toilet", "sink", "bathtub"]
 
 
 @dataclass(frozen=True)

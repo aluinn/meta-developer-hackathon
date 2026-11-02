@@ -14,6 +14,22 @@ Add a new entry at the TOP after each work session. Copy the template.
 
 ---
 
+## 2026-11-02 - Aluinn (connect the website to the server)
+- What I did: the Upload screen now really works. New `web/src/api.ts` (`processScan`: upload, label, world, fetch world.json; relative URLs; plain-English errors; file checks before upload). Small edits to Zac's files: `main.ts` (`onFileChosen` runs `checkScanFile` then `openWorld(..., processScan)`), `screens.ts` (file input accepts `.glb,.obj`, not `.usdz`, which the server rejects), `vite.config.ts` (dev proxy for the API paths). Server default SAM prompts widened to 12 (sofa, armchair, chair, table, desk, bed, rug, door, bookshelf, toilet, sink, bathtub) because the site cannot ask what kind of room it is; fallback roles extended; about $0.24 per scan. Test script `web/scripts/test-api.ts`.
+- What worked / what didn't: `node web/scripts/test-api.ts` passes (call order, upload form, 10 error cases). Real end-to-end test in headless Chrome at phone size: chose the real bathroom GLB on the Upload screen, 47 seconds later the Results screen showed "2 objects found" with the 3D room (sink and toilet boxes, Start and Goal markers), 4 API calls all 200, no browser errors; wrong file type and a corrupt .glb give readable messages; the example room still works. NOT done: Layout, voice, render and score are not connected to the UI yet; real iPhone not tried; a furniture scan has not been through the website.
+- AI tools used (and for what): Claude Code, to write the code and drive Chrome for the tests.
+- Next: Zac: pull before editing `main.ts`/`screens.ts`; connect the Layout tab to `POST /layout`. Me: rescan a furniture room.
+
+---
+
+## 2026-11-02 - Aluinn (first deploy on Render)
+- What I did: deployed the all-in-one server to Render (Blueprint from `render.yaml`, branch `main`, free plan; `MODEL_API_KEY` entered in Render's dashboard only, never committed). Tested the live service from here.
+- What worked / what didn't: the Docker build worked first time. Live checks: `/health` 200, the website and its JS bundle, `/docs`; scan upload (327,680 -> 50,000 triangles, so numpy/scipy/trimesh work in the image); a real `/layout` call (Muse Spark moved the coffee table next to the sofa, valid, first attempt, walkable before and after); a real `/transcribe` call (stereo 48 kHz WAV accepted and converted; empty transcript for a test tone, as expected). NOT tested live: `/render`, the SAM calls (`/label`, `/score` on a deployed scan), WebM/Ogg audio (needs ffmpeg in the image), anything with real speech. Reminders: free plan sleeps after 15 min and wipes scans; the URL is public and spends credits, so it is NOT written in the repo.
+- AI tools used (and for what): Claude Code, to test the live service.
+- Next: rescan a furniture room; run the whole chain on the live site; `/render` with a real photo; Zac connects the web app to the API.
+
+---
+
 ## 2026-11-02 - Aluinn (one server for site + API)
 - What I did: FastAPI now serves the built web app at `/` (mounted last, so the API routes win) when `web/dist` exists. The `Dockerfile` is two stages: build the web app with Node, then the Python image with the site copied in. `.dockerignore` no longer excludes `web/`. Docs updated (`docs/deployment.md`, architecture, README). No CORS needed in production, and no separate Vercel deploy.
 - What worked / what didn't: tested locally on one port with no Vite dev server: `/` serves the site, the JS and the lazy physics chunk load, and `/health`, `/world/<id>`, `/score/<id>`, `/docs` and `POST /layout` (422 = API answered) all still reach the API. `npm ci --dry-run` confirms the lockfile is in sync. NOT tested: the Docker build itself (no Docker on this Mac) or a deployed Render service. Zac's web app does not call the API yet; when it does it must use relative URLs, and `web/vite.config.ts` needs a dev proxy.

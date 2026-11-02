@@ -13,8 +13,8 @@ cd ../server && uvicorn main:app --port 8000     # then open http://localhost:80
 ```
 (If `web/dist` doesn't exist the server just runs the API alone.) Because the page and the API come from the same address:
 - **No CORS needed** in production. `ALLOWED_ORIGINS` only matters while developing with `npm run dev` (page on :5173, API on :8000).
-- **Zac's code should call the API with relative paths**, e.g. `fetch('/layout', ...)`, never `http://localhost:8000/layout`. In development, add a
-  proxy in `web/vite.config.ts` (`server: { proxy: { '/scan': 'http://localhost:8000', '/world': ..., '/layout': ..., '/render': ..., '/transcribe': ..., '/score': ... } }`) so the same relative paths work on :5173.
+- **The web app calls the API with relative paths**, e.g. `fetch('/layout', ...)`, never `http://localhost:8000/layout`. The proxy in `web/vite.config.ts` already forwards
+  `/scan`, `/world`, `/layout`, `/render`, `/transcribe`, `/score` and `/health` to port 8000 under `npm run dev`, so the same relative paths work on :5173. New code (`/layout`, voice, render) should use the same pattern as `web/src/api.ts`.
 - **No separate Vercel deploy is needed.** Render serves the site too.
 
 ## Options
@@ -48,7 +48,7 @@ when the service restarts, redeploys, or spins down after 15 idle minutes. So:
    - `MODEL_API_KEY`: paste your own Meta key here. Nowhere else.
    - `ALLOWED_ORIGINS`: only needed if the website is hosted somewhere else. With the all-in-one setup, enter `http://localhost:5173` (it just can't be left empty).
      Several are allowed, comma-separated, with no trailing slash or spaces.
-4. Click **Apply**. The first build takes a few minutes. Render shows the URL, like `https://room-world-server.onrender.com`.
+4. Click **Apply**. The first build takes a few minutes. Render shows the URL, like `https://your-service-name.onrender.com`.
 5. Check it: open `https://<your-url>/health`. You should see `{"status":"ok"}`. (First request after sleeping takes about a minute.)
    Then open `https://<your-url>/` for the website, and `https://<your-url>/docs` for the API test page.
 6. Every push to the branch Render watches rebuilds both the site and the server. (The build is longer now: it installs and builds the web app first.)

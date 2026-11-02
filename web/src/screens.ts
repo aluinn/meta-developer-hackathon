@@ -55,7 +55,7 @@ function buildUpload(h: ScreenHandlers) {
   input.type = 'file'
   input.id = 'scan-file'
   input.className = 'visually-hidden'
-  input.accept = '.glb,.obj,.usdz'
+  input.accept = '.glb,.obj'
   const pick = el('label', 'btn btn-primary', 'Choose a scan file')
   pick.htmlFor = 'scan-file'
 

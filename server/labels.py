@@ -24,7 +24,7 @@ def _scan_dir(scan_id: str):
 
 
 class LabelRequest(BaseModel):
-    prompts: list[str] = Field(default_factory=lambda: list(PROMPTS), min_length=1, max_length=16, description='What to look for, as short noun phrases, e.g. ["toilet", "sink", "bathtub"]. Default: living-room furniture.')
+    prompts: list[str] = Field(default_factory=lambda: list(PROMPTS), min_length=1, max_length=16, description='What to look for, as short noun phrases, e.g. ["toilet", "sink", "bathtub"]. Default: a broad list covering living rooms, bedrooms and bathrooms.')
 
 
 @router.post("/scan/{scan_id}/label")

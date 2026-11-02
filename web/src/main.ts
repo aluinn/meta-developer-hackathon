@@ -1,4 +1,5 @@
 import './style.css'
+import { checkScanFile, processScan } from './api.ts'
 import type { PlayMode } from './play.ts'
 import { createScreens } from './screens.ts'
 import { createViewer, type Viewer } from './viewer.ts'
@@ -76,8 +77,16 @@ async function openWorld(title: string, load: () => Promise<World>): Promise<voi
 }
 
 const screens = createScreens(root, {
-  // A real file: just show its name and size. Nothing is uploaded yet.
-  onFileChosen: (file) => screens.showFile(file),
+  // A real scan: send it to the server (upload, find furniture, work out roles) and show the world it comes back with.
+  onFileChosen: (file) => {
+    try {
+      checkScanFile(file) // wrong type, too big or empty: say so straight away
+    } catch (err) {
+      screens.showError(err instanceof Error ? err.message : String(err))
+      return
+    }
+    void openWorld(file.name.replace(/\.[^.]+$/, ''), () => processScan(file, screens.setStatus))
+  },
 
   onUseExample: () => openWorld('Example room', loadExampleWorld),
 

@@ -21,8 +21,9 @@ ROLES = ["fixed", "movable", "climbable", "passable"]
 
 # Used only when the model gives no valid answer for an object. Deliberately low confidence.
 FALLBACK_ROLES = {
-    "sofa": "climbable", "bed": "climbable", "table": "movable", "desk": "movable",
+    "sofa": "climbable", "bed": "climbable", "armchair": "climbable", "table": "movable", "desk": "movable",
     "chair": "movable", "bookshelf": "fixed", "rug": "passable", "door": "passable",
+    "toilet": "fixed", "sink": "fixed", "bathtub": "fixed",
 }
 FALLBACK_CONFIDENCE = 0.3
 

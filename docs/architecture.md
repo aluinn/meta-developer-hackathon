@@ -1,8 +1,10 @@
 # Architecture
 
 How Room world fits together. Status as of 2026-11-02: **A1 to A6 are built.** Proven on a real scan (a small bathroom, `shared/real_world_01.json`): A1 upload, A2 SAM labelling
-(real SAM call, 29 s), A3 roles (real Muse Spark call, 8 s) and A6 `/score`. Image generation (the character) is proven too. **Not yet run for real:** `/layout`,
-`/render`, `/transcribe` (tested offline with fakes only).
+(real SAM call, 29 s), A3 roles (real Muse Spark call, 8 s) and A6 `/score`. Image generation (the character) is proven too.
+**Deployed on Render** (one service for site + API). On the live server, proven for real: scan upload and simplification, `/layout` (Muse Spark moved the coffee table
+next to the sofa, accepted on the first attempt), `/transcribe` (call and stereo 48 kHz to 16 kHz conversion work; a test tone gave an empty transcript, as expected).
+**Not yet run for real:** `/render` (needs a room photo), `/transcribe` on actual speech or on WebM/Ogg/MP4 (needs ffmpeg in the image), and anything on a furniture scan.
 
 ## The big picture
 
@@ -31,6 +33,14 @@ flowchart LR
 `shared/world.schema.json` is the handover. The server produces `world.json`; the web app only ever reads it.
 Both sides can be built in parallel because `shared/example_world.json` is a valid stand-in.
 
+## How the website uses the server
+Choosing a scan file on the Upload screen runs `web/src/api.ts` `processScan()`: `POST /scan` (multipart field `file`), then
+`POST /scan/{id}/label` (no body: the server's broad default prompts), then `POST /scan/{id}/world`, then `GET /world/{id}`, and the world.json that comes back is
+shown by the existing viewer. The Loading screen shows a message before each step; failures become plain-English messages on the Upload screen
+(wrong file type, over 100 MB, unreadable file, no furniture found, AI service problem, server unreachable). Addresses are relative (`/scan`), so it works the same on
+the deployed site and, via the proxy in `web/vite.config.ts`, under `npm run dev`. One scan takes about 45 seconds and costs about $0.25 in Meta credits.
+Not yet connected: Layout tab (`/layout`), voice (`/transcribe`), before/after (`/render`) and the score (`/score`). Test: `node web/scripts/test-api.ts`.
+
 ## The principle: models propose, code checks
 
 Every Meta model call goes through our own validation before anything reaches the user or the web app:
@@ -51,8 +61,8 @@ API keys stay on the server (`MODEL_API_KEY` in `.env`, git-ignored). The browse
 | A2 | `POST /scan/{scan_id}/label` | 8 virtual cameras, SAM 3.1 per view per prompt, project masks to 3D, vote, bounding boxes | yes (`sam-3.1`) | geometry/voting tested with a fake SAM; real SAM call proven on the bathroom scan |
 | A3 | `POST /scan/{scan_id}/world` | Muse Spark assigns roles, builds and validates `world.json` | yes (`muse-spark-1.3`) | real Muse Spark call proven on the bathroom scan |
 | A3 | `GET /world/{scan_id}` | returns the saved `world.json` | no | tested |
-| A4 | `POST /transcribe` | browser audio -> transcript | yes (`muse-voice-transcribe-1.0`) | conversion and request format tested; **real call untested** |
-| A4 | `POST /layout` | goal text + world -> new valid `world.json` + a reason per change | yes (`muse-spark-1.3`) | validation/retry tested with a scripted stand-in; **real model untested** |
+| A4 | `POST /transcribe` | browser audio -> transcript | yes (`muse-voice-transcribe-1.0`) | real call proven with a WAV tone (empty transcript); real speech and WebM untested |
+| A4 | `POST /layout` | goal text + world -> new valid `world.json` + a reason per change | yes (`muse-spark-1.3`) | real model proven on the example world (first attempt accepted); validation/retry tested with a scripted stand-in |
 | A5 | `POST /render`, `GET /render/{scan_id}/before\|after` | photo + old and new world -> before/after images (Muse Image edit, only moved objects change) | yes (`muse-image-1.0`) | request format, prompt and checks tested with a fake model; **real call untested** |
 | A6 | `GET /score/{scan_id}` | scan-versus-simulation match score (outline of each world box vs SAM's mask of the real object) | no (default method) | proven on the bathroom scan (44%); the SAM-on-render option failed on real data |
 | | `GET /health` | `{"status":"ok"}` | no | |
