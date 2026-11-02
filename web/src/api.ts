@@ -2,7 +2,8 @@
 // in production the server also serves this page, and in development Vite forwards these paths (vite.config.ts).
 
 import { USE_FAKE_SERVER } from './config.ts'
-import { parseWorld, type World } from './world.ts'
+import { fakeLayoutAnswer, type RawLayoutAnswer } from './fakeLayout.ts'
+import { parseWorld, type Vec3, type World } from './world.ts'
 
 const MAX_SCAN_BYTES = 100 * 1024 * 1024 // the server's limit
 const SCAN_EXTENSIONS = ['.glb', '.obj']
@@ -16,6 +17,11 @@ let apiBase = ''
 /** For tests only: how often to ask the server for progress. */
 export function setPollInterval(ms: number): void {
   pollIntervalMs = ms
+}
+let useFakeServer: boolean = USE_FAKE_SERVER
+/** For tests only: pretend to be the server (true) or really call it (false), whatever config.ts says. */
+export function setFakeServer(on: boolean): void {
+  useFakeServer = on
 }
 /** For tests only: where the server is, when the page is not served by it. */
 export function setApiBase(base: string): void {
@@ -222,7 +228,7 @@ function voiceError(message: string, status = 0): ApiError {
 
 /** Send a recording (a 16 kHz mono WAV) to the server and get back what was said. */
 export async function transcribe(wav: Blob): Promise<string> {
-  if (USE_FAKE_SERVER) {
+  if (useFakeServer) {
     await sleep(1000)
     return FAKE_TRANSCRIPT
   }
@@ -257,4 +263,131 @@ export async function transcribe(wav: Blob): Promise<string> {
     throw voiceError("The server's answer wasn't what we expected. Type your goal instead.", response.status)
   }
   return data.transcript.trim()
+}
+
+// ---- Layout: ask the AI to rearrange the room (POST /layout) ----
+
+const LAYOUT_TIMEOUT_MS = 120 * 1000 // the model can take a while, and the free server may be waking up
+const NO_SCAN_ID = '0'.repeat(32) // example rooms have no uploaded scan; the server only needs the id to look like one when the world is sent along
+
+export interface LayoutChange {
+  id: string
+  label: string
+  from: { position: Vec3; rotation_y: number }
+  to: { position: Vec3; rotation_y: number }
+  reason: string
+}
+
+export interface LayoutResult {
+  /** The whole room with the moves applied. */
+  world: World
+  changes: LayoutChange[]
+  /** Anything the AI could not do, in its own words. Empty if nothing. */
+  notes: string
+  attempts: number
+  /** A rough check by the server (null = could not tell). The clearance check on the page is the proper one. */
+  spawnToGoalWalkable: { before: boolean | null; after: boolean | null }
+}
+
+const LAYOUT_NOT_REACHED = "Couldn't reach the server. Is it running? (If it was asleep, try again in a minute.)"
+
+/** Turn a /layout error code into a sentence for a person (the codes are in docs/architecture.md, "A4 contracts"). */
+export function layoutErrorMessage(status: number): string {
+  switch (status) {
+    case 422:
+      return "We couldn't find a valid arrangement for that, so nothing was changed. Try asking for something simpler."
+    case 503:
+      return 'The AI service is not set up on the server yet (no API key), so the layout cannot be changed.'
+    case 502:
+      return 'The AI service had a problem. Please try again in a moment.'
+    default:
+      return `Something went wrong talking to the server (error ${status}). Please try again.`
+  }
+}
+
+/** The scan's id, from world.source_scan ("<scan_id>/original.glb"), or a placeholder for rooms that were not scanned. */
+export function scanIdOf(world: World): string {
+  const match = /^([0-9a-f]{32})\//.exec(world.source_scan)
+  return match ? match[1] : NO_SCAN_ID
+}
+
+function layoutError(message: string, status = 0): ApiError {
+  const error = new ApiError(message)
+  error.status = status
+  return error
+}
+
+function isObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+}
+
+function parseChange(c: unknown): LayoutChange {
+  if (!isObject(c) || typeof c.id !== 'string' || typeof c.label !== 'string' || typeof c.reason !== 'string' || !isObject(c.from) || !isObject(c.to)) {
+    throw new Error('a change is missing something')
+  }
+  const end = (e: Record<string, unknown>) => {
+    const p = e.position
+    if (!Array.isArray(p) || p.length !== 3 || !p.every((n) => typeof n === 'number' && Number.isFinite(n))) throw new Error('bad position')
+    if (typeof e.rotation_y !== 'number') throw new Error('rotation_y missing')
+    return { position: [p[0], p[1], p[2]] as Vec3, rotation_y: e.rotation_y }
+  }
+  return { id: c.id, label: c.label, from: end(c.from), to: end(c.to), reason: c.reason }
+}
+
+function parseAnswer(data: unknown): LayoutResult {
+  if (!isObject(data) || !Array.isArray(data.changes)) throw new Error('no changes list')
+  const walk = isObject(data.spawn_to_goal_walkable) ? data.spawn_to_goal_walkable : {}
+  const flag = (v: unknown): boolean | null => (typeof v === 'boolean' ? v : null)
+  return {
+    world: parseWorld(data.world),
+    changes: data.changes.map(parseChange),
+    notes: typeof data.notes === 'string' ? data.notes : '',
+    attempts: typeof data.attempts === 'number' ? data.attempts : 1,
+    spawnToGoalWalkable: { before: flag(walk.before), after: flag(walk.after) },
+  }
+}
+
+/**
+ * Ask the AI to rearrange `world` to meet `goal`. Only movable objects move; nothing is added or removed. Throws an ApiError with
+ * a plain-English message when the AI's answer was rejected (422), the server has no key (503), or the server can't be reached.
+ */
+export async function layout(goal: string, world: World): Promise<LayoutResult> {
+  const text = goal.trim()
+  if (text.length < 3) throw layoutError('Say or type what you want done to the room first.')
+  const scanId = scanIdOf(world)
+  if (useFakeServer) {
+    await sleep(1200)
+    return parseAnswer(fakeLayoutAnswer(scanId, text, world) satisfies RawLayoutAnswer)
+  }
+
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), LAYOUT_TIMEOUT_MS)
+  let response: Response
+  try {
+    response = await fetch(apiBase + '/layout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scan_id: scanId, goal: text, world }),
+      signal: controller.signal,
+    })
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') throw layoutError('The server took too long to answer. Please try again.')
+    throw layoutError(LAYOUT_NOT_REACHED)
+  } finally {
+    clearTimeout(timer)
+  }
+
+  if (!response.ok) {
+    // Our server always explains itself with a JSON {"detail": ...}. An error WITHOUT that is the hosting layer (asleep, restarting) or the dev proxy.
+    const body: unknown = await response.json().catch(() => null)
+    const fromServer = isObject(body) && 'detail' in body
+    if (!fromServer && response.status >= 500) throw layoutError(LAYOUT_NOT_REACHED, response.status)
+    throw layoutError(layoutErrorMessage(response.status), response.status)
+  }
+  const data: unknown = await response.json().catch(() => null)
+  try {
+    return parseAnswer(data)
+  } catch {
+    throw layoutError("The server's answer wasn't what we expected. Please try again.", response.status)
+  }
 }
