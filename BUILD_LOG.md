@@ -14,6 +14,14 @@ Add a new entry at the TOP after each work session. Copy the template.
 
 ---
 
+## 2026-11-02 - Aluinn (one server for site + API)
+- What I did: FastAPI now serves the built web app at `/` (mounted last, so the API routes win) when `web/dist` exists. The `Dockerfile` is two stages: build the web app with Node, then the Python image with the site copied in. `.dockerignore` no longer excludes `web/`. Docs updated (`docs/deployment.md`, architecture, README). No CORS needed in production, and no separate Vercel deploy.
+- What worked / what didn't: tested locally on one port with no Vite dev server: `/` serves the site, the JS and the lazy physics chunk load, and `/health`, `/world/<id>`, `/score/<id>`, `/docs` and `POST /layout` (422 = API answered) all still reach the API. `npm ci --dry-run` confirms the lockfile is in sync. NOT tested: the Docker build itself (no Docker on this Mac) or a deployed Render service. Zac's web app does not call the API yet; when it does it must use relative URLs, and `web/vite.config.ts` needs a dev proxy.
+- AI tools used (and for what): Claude Code, to write and test the change.
+- Next: Render deploy; tell Zac about relative URLs and the dev proxy.
+
+---
+
 ## 2026-11-02 - Aluinn (first real /score: SAM on the render failed, silhouette works)
 - What I did: ran `GET /score` for real on the bathroom (the 64-call SAM-on-render method as specified). Result: every object scored 0%. Looking at the render showed why: SAM was shown plain grey boxes in a plain room and does not recognise them as a toilet or sink (it found both in the real scan, 5 views each). So I added `method=silhouette` (now the default): compare each box's outline in the render of world.json with SAM's mask of that object on the scan (free, no API calls). `method=sam_on_render` is kept as an option.
 - What worked / what didn't: bathroom score with the silhouette method: overall 44% (toilet 37.6%, sink 50.7%, stable across views). Low because a box cannot match a toilet, so scores must be read relatively. First version penalised views where SAM saw no toilet at all (28.6%); now those are skipped, and a box is only a miss where SAM saw that object type elsewhere in the view. The offline test passes for both methods (faithful ~85%, moved table 90% -> 0%, missing sofa unmatched). Lesson: my fake SAM in the tests found boxes by colour, so the original method passed tests but failed on real data; the real run was the only thing that showed it. The score endpoint's cache survived a code change (needed `?refresh=true`).

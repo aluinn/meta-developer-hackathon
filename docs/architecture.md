@@ -162,8 +162,9 @@ change, or you pass `?refresh=true` (changing the scoring code does not invalida
 - A scan without colour gives a warning: SAM saw grey renders in A2.
 
 ## Deployment
-`Dockerfile` + `render.yaml` run the server on Render (see `docs/deployment.md` for options, steps and risks).
-Settings: `MODEL_API_KEY` (secret, set in the host's dashboard only), `ALLOWED_ORIGINS` (web app address(es), comma-separated; CORS allows only these),
+`Dockerfile` + `render.yaml` run **one server for everything** on Render: the image builds the web app and FastAPI serves it at `/` with the API alongside
+(API routes win; see `docs/deployment.md`). The web app should call the API with relative paths (`/layout`, not `http://localhost:8000/layout`).
+Settings: `MODEL_API_KEY` (secret, set in the host's dashboard only), `ALLOWED_ORIGINS` (only needed if the web app is hosted elsewhere or during `npm run dev`; comma-separated; CORS allows only these),
 optional `SCANS_DIR` (where scans are stored; default `server/scans`). The host's disk is temporary on the free plan, so scans do not survive a restart.
 
 ## Costs (from dev.meta.ai pricing, 2026-11-01)
