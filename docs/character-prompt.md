@@ -17,6 +17,11 @@ Plain pure white background with no shadow, no floor and no props. No text, no l
 completely original and must not resemble any existing character, mascot, game or brand.
 ```
 
+## Characters made by players
+`POST /character` uses the same style with the player's words in front: the template is `TEMPLATE` in `server/labelling/character.py`
+("An original, friendly game character: {description}. Simple flat 2D game-art style ... Plain pure white background ... No text, no letters, no logos. The design must be completely original and must not resemble any existing character, mascot, game or brand.").
+The description is limited to 3 to 80 plain characters on one line and checked against a block-list first (see `docs/architecture.md`, "Character maker").
+
 ## Why it is written this way
 - **Original and simple:** a generic bean with a leaf tuft, with no references to existing characters or brands, so the licence stays clean.
 - **Plain white background:** Muse Image ignores a transparent-background request, so the script removes the white that touches the image border

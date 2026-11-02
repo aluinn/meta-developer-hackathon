@@ -1,5 +1,6 @@
 import './style.css'
 import { checkScanFile, processScan } from './api.ts'
+import { openCharacterPanel } from './characterPanel.ts'
 import type { PlayMode } from './play.ts'
 import { scanMeshUrl } from './scanMesh.ts'
 import { createScreens } from './screens.ts'
@@ -104,6 +105,10 @@ const screens = createScreens(root, {
   onUseTestRoom: import.meta.env.DEV ? () => openWorld('Test room', loadTestWorld) : undefined,
 
   onPlay: () => void enterPlay(),
+
+  onCharacter: () => {
+    openCharacterPanel()
+  },
 
   onStartOver: () => {
     closeAll()

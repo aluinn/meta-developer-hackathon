@@ -72,6 +72,7 @@ API keys stay on the server (`MODEL_API_KEY` in `.env`, git-ignored). The browse
 | A3 | `GET /world/{scan_id}` | returns the saved `world.json` | no | tested |
 | A4 | `POST /transcribe` | browser audio -> transcript | yes (`muse-voice-transcribe-1.0`) | real call proven with a WAV tone (empty transcript); real speech and WebM untested |
 | A4 | `POST /layout` | goal text + world -> new valid `world.json` + a reason per change | yes (`muse-spark-1.3`) | real model proven on the example world (first attempt accepted); validation/retry tested with a scripted stand-in |
+| A5 | `POST /character` | a player describes a character; Muse Image draws it; returns a 512 px transparent PNG | yes (`muse-image-1.0`, about $0.01 each) | real call proven (25 s); checks, limits and failures tested offline |
 | A5 | `POST /render`, `GET /render/{scan_id}/before\|after` | photo + old and new world -> before/after images (Muse Image edit, only moved objects change) | yes (`muse-image-1.0`) | request format, prompt and checks tested with a fake model; **real call untested** |
 | A6 | `GET /score/{scan_id}` | scan-versus-simulation match score (outline of each world box vs SAM's mask of the real object) | no (default method) | proven on the bathroom scan (44%); the SAM-on-render option failed on real data |
 | | `GET /health` | `{"status":"ok"}` | no | |
@@ -137,6 +138,14 @@ and asks `muse-image-1.0` (`POST /v1/images/edits`) to move only those and keep 
 
 **Character image** (Z3): `server/scripts/make_character.py` generates an original character from the prompt in
 `docs/character-prompt.md` and saves it to `web/public/assets/character.png` (white background removed). See that doc for status.
+
+## Character maker (`POST /character`)
+The Character tab on the Results screen lets a player describe a character (3 to 80 characters, e.g. "a sleepy red panda wearing a tiny blue hat"). `web/src/api.ts` `generateCharacter()` posts it; the server (`server/characters.py`) wraps it in a fixed template
+(`server/labelling/character.py`: "an original, friendly game character: {description}. Flat 2D game-art style... plain white background... no text, no logos... must not resemble any existing character, mascot, game or brand"), asks `muse-image-1.0`
+in a worker process, removes the white background, shrinks to 512 px and returns the PNG. The browser keeps it in `localStorage` (this browser only) and play mode draws it as the character (the default bean if none).
+**Safety and cost:** the description may contain only letters, numbers and `, . ' - !` on one line; a block-list (existing characters/franchises/brands, unsafe words, "ignore/instructions/prompt") refuses obvious abuse with a 422; limits: one per 8 seconds per visitor,
+8 per visitor per hour, 40 per hour for the whole server (env `CHARACTER_PER_VISITOR_HOURLY`, `CHARACTER_GLOBAL_HOURLY`, `CHARACTER_MIN_SECONDS_BETWEEN`); it answers 503 "busy" while a scan job runs (same one-at-a-time lock). It is a simple filter, not a guarantee:
+plain words typed on one line can still reach the image model, and the visitor limit uses the proxy's `X-Forwarded-For`, which a client can fake; the server-wide hourly cap is the real protection for the credits (40 x $0.01 = $0.40 an hour at most).
 
 ## A6: scan-versus-simulation score
 

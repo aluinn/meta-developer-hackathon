@@ -1,6 +1,6 @@
 // Offline test of src/api.ts with a pretend server (no network, no cost). Run: node scripts/test-api.ts
 import { readFileSync } from 'node:fs'
-import { ApiError, checkScanFile, processScan, setPollInterval } from '../src/api.ts'
+import { ApiError, checkScanFile, generateCharacter, processScan, setPollInterval } from '../src/api.ts'
 
 setPollInterval(0) // do not wait between progress checks in tests
 const exampleWorld = JSON.parse(readFileSync(new URL('../../shared/example_world.json', import.meta.url), 'utf8'))
@@ -22,7 +22,8 @@ function fakeServer(replies: Record<string, Reply | Reply[]>) {
     const n = (used[key] = (used[key] ?? 0) + 1)
     const reply = Array.isArray(entry) ? entry[Math.min(n, entry.length) - 1] : entry
     if (reply instanceof Error) throw reply
-    return new Response(typeof reply.body === 'string' ? reply.body : JSON.stringify(reply.body ?? {}), { status: reply.status ?? 200 })
+    const body = reply.body instanceof Uint8Array || typeof reply.body === 'string' ? reply.body : JSON.stringify(reply.body ?? {})
+    return new Response(body as BodyInit, { status: reply.status ?? 200 })
   }) as typeof fetch
   return calls
 }
@@ -131,6 +132,37 @@ check(dead.includes('Could not reach the server'), 'five failed checks in a row 
 fakeServer({ ...happy, 'GET /world/<id>': { body: { version: 1 } } })
 const broken = await processScan(file('a.glb'), () => {}).then(() => 'no error', (e: Error) => e.message)
 check(broken !== 'no error', 'a broken world.json should be rejected')
+
+// 8. the character maker: a picture comes back as a data URL; every refusal is shown in the server's own friendly words
+const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3, 250, 251, 252])
+let sentBody = ''
+globalThis.fetch = (async (url: string, init?: RequestInit) => {
+  sentBody = String(init?.body)
+  return new Response(png, { status: 200, headers: { 'content-type': 'image/png' } })
+}) as typeof fetch
+const url = await generateCharacter('  a sleepy red panda  ')
+check(url.startsWith('data:image/png;base64,') && Uint8Array.from(atob(url.split(',')[1]), (c) => c.charCodeAt(0)).every((b, i) => b === png[i]), 'the picture should come back as a data URL with the same bytes')
+check(JSON.parse(sentBody).description === 'a sleepy red panda', 'the description should be trimmed and sent as JSON')
+for (const [text, expected] of [['hi', '3 to 80'], ['x'.repeat(81), '3 to 80']] as const) {
+  fakeServer({})
+  const m = await message(generateCharacter(text))
+  check(m.includes(expected), `a description of ${text.length} characters should be refused before sending, got "${m}"`)
+}
+const characterCases: [Reply, string][] = [
+  [{ status: 422, body: { detail: "That description isn't allowed. Describe an original character." } }, "isn't allowed"],
+  [{ status: 429, body: { detail: 'Slow down a little: you can make another character in 6 seconds.' } }, 'Slow down a little'],
+  [{ status: 503, body: { detail: 'The server is busy with another job. Try again in a minute.' } }, 'busy with another job'],
+  [{ status: 502, body: { detail: 'The drawing service had a problem. Please try again in a moment.' } }, 'drawing service had a problem'],
+  [{ status: 502, body: '<html>502 Bad Gateway</html>' }, 'busy or restarting'],
+  [{ status: 429, body: '<html>too many</html>' }, 'Too many requests'],
+  [new TypeError('fetch failed'), 'Could not reach the server'],
+]
+for (const [reply, expected] of characterCases) {
+  fakeServer({ 'POST /character': reply })
+  const m = await message(generateCharacter('a happy cloud'))
+  console.log(`  /character -> ${m}`)
+  check(m.includes(expected), `/character: expected "${expected}", got "${m}"`)
+}
 
 console.log(failures.length ? `\nFAIL:\n - ${failures.join('\n - ')}` : '\nPASS')
 process.exit(failures.length ? 1 : 0)

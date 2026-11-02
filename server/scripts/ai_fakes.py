@@ -67,3 +67,24 @@ def make_segmenter():
 
 def make_assigner():
     return SlowMuse()
+
+
+def generate_image(prompt):
+    """A fake Muse Image for the character tests: records the prompt it was given and draws a yellow blob on white."""
+    from PIL import Image, ImageDraw
+
+    from labelling.muse_image import ImageApiError
+
+    path = os.environ.get("FAKE_PROMPT_FILE")
+    if path:
+        with open(path, "w") as f:
+            f.write(prompt)
+    if MODE == "img_fail":
+        raise ImageApiError("pretend the image service is down")
+    if MODE == "die":
+        os.kill(os.getpid(), signal.SIGKILL)
+    image = Image.new("RGB", (800, 800), "white")
+    draw = ImageDraw.Draw(image)
+    draw.ellipse([200, 200, 600, 700], fill=(240, 200, 30), outline=(30, 30, 30), width=6)
+    draw.ellipse([330, 380, 370, 420], fill="white")  # a white "eye" inside the body, which must stay opaque
+    return image
