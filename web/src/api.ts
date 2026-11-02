@@ -20,6 +20,10 @@ let fake = USE_FAKE_SERVER
 export function setFakeServer(on: boolean): void {
   fake = on
 }
+/** Is the pretend server on? (The screens say so next to numbers the pretend server made up.) */
+export function isFakeServer(): boolean {
+  return fake
+}
 /** For tests only: how often to ask the server for progress. */
 export function setPollInterval(ms: number): void {
   pollIntervalMs = ms
@@ -274,7 +278,7 @@ const SCORE_TIMEOUT_MS = 90 * 1000 // the first score for a scan has to render i
 const MAX_PHOTO_BYTES = 15 * 1024 * 1024 // the server's limit
 const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
-const NOT_SCANNED =
+export const NOT_SCANNED =
   "This room wasn't scanned, so the server doesn't know it. Layout suggestions and the match score need a room you scanned and uploaded."
 const SCAN_FORGOTTEN =
   'The server no longer has this scan (the free server forgets scans when it restarts). Upload the scan again.'

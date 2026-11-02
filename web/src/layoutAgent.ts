@@ -294,7 +294,10 @@ export function describeState(r: ClearanceResult): string {
   return `${why}, ${floor}`
 }
 
-/** Better, worse or the same? First whether the goal can be reached, then the tightest gap (3 cm or more counts), then the floor reachable (1% or more). */
+/** A change in "floor reachable" smaller than this many points is noise (moving a table nearer a wall can shave a point or two), so it doesn't make a layout better or worse. */
+const MEANINGFUL_FLOOR_POINTS = 3
+
+/** Better, worse or the same? First whether the goal can be reached, then the tightest gap (3 cm or more counts), then the floor reachable (3 points or more). */
 export function verdictOf(before: ClearanceResult, after: ClearanceResult): Verdict {
   if (before.reachable !== after.reachable) return after.reachable ? 'better' : 'worse'
   // For a blocked room the "gap" is the gap that blocks; if there isn't one (sealed), count it as 0.
@@ -303,7 +306,7 @@ export function verdictOf(before: ClearanceResult, after: ClearanceResult): Verd
   const ga = gapOf(after)
   if (ga !== gb && !(Number.isFinite(ga) && Number.isFinite(gb) && Math.abs(ga - gb) < 3)) return ga > gb ? 'better' : 'worse'
   const diff = after.reachablePercent - before.reachablePercent
-  if (Math.abs(diff) >= 1) return diff > 0 ? 'better' : 'worse'
+  if (Math.abs(diff) >= MEANINGFUL_FLOOR_POINTS) return diff > 0 ? 'better' : 'worse'
   return 'same'
 }
 
