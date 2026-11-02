@@ -1,4 +1,5 @@
 import './style.css'
+import { createClearancePanel, type ClearancePanel } from './clearancePanel.ts'
 import { setLayoutGoal } from './layoutGoal.ts'
 import { createLayoutPanel, type LayoutPanel } from './layoutPanel.ts'
 import { checkScanFile, processScan } from './api.ts'
@@ -7,7 +8,7 @@ import type { PlayMode } from './play.ts'
 import { scanMeshUrl } from './scanMesh.ts'
 import { createScreens, type Mode } from './screens.ts'
 import { createViewer, type Viewer } from './viewer.ts'
-import { loadExampleWorld, loadTestWorld, type World } from './world.ts'
+import { loadClearanceTestWorld, loadExampleWorld, loadTestWorld, type World } from './world.ts'
 
 const root = document.querySelector<HTMLDivElement>('#app')
 if (!root) throw new Error('Missing #app element in index.html')
@@ -22,12 +23,15 @@ let world: World | null = null
 let viewer: Viewer | null = null
 let play: PlayMode | null = null
 let layout: LayoutPanel | null = null // the Layout tab's panel (exists once it has been opened)
+let clearance: ClearancePanel | null = null // the clearance check, under the Layout panel (draws on the viewer)
 let layoutOpen = false
 // Bumped whenever we leave a mode, so a slow-loading play mode knows it's no longer wanted.
 let session = 0
 
 function closeAll(): void {
   session++
+  clearance?.dispose() // before the viewer it draws on
+  clearance = null
   viewer?.dispose()
   viewer = null
   play?.dispose()
@@ -54,15 +58,17 @@ function showViewer(): void {
   }
 }
 
-/** The Layout tab opens the panel; pressing it again closes it. The 3D view stays underneath. */
+/** The Layout tab opens the panel (voice, then the clearance check); pressing it again closes it. The 3D view stays visible. */
 function toggleLayout(): void {
   if (!world || play) return
   layoutOpen = !layoutOpen
   if (layoutOpen) {
     layout ??= createLayoutPanel(screens.layoutContainer)
+    if (viewer) clearance ??= createClearancePanel(screens.layoutContainer, viewer, world)
   } else {
     layout?.stopRecording() // closing the panel must not leave the microphone on
   }
+  clearance?.setActive(layoutOpen) // the route and person only show while the Layout tab is open
   screens.setLayoutOpen(layoutOpen)
 }
 
@@ -127,6 +133,7 @@ const screens = createScreens(root, {
 
   // Development only: the production build leaves this out.
   onUseTestRoom: import.meta.env.DEV ? () => openWorld('Test room', loadTestWorld, 'game') : undefined,
+  onUseGapTestRoom: import.meta.env.DEV ? () => openWorld('Narrow-gap test room', loadClearanceTestWorld, 'game') : undefined,
 
   onPlay: () => void enterPlay(),
 

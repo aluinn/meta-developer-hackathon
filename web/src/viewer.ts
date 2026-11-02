@@ -12,6 +12,10 @@ export interface Viewer {
   setWorld: (world: World) => void
   /** Load the scanned room (.glb) into the scan layer and turn the boxes into faint overlays on top of it. */
   loadScanMesh: (url: string) => Promise<void>
+  /** An empty group drawn with the room, for extras like the clearance check's route. Kept when the room changes. */
+  overlay: THREE.Group
+  /** Call `fn(seconds since last frame)` every frame. Returns a function that stops it. */
+  onFrame: (fn: (dt: number) => void) => () => void
   /** Stop everything and free the graphics memory. Call this when leaving the screen. */
   dispose: () => void
 }
@@ -81,11 +85,23 @@ export function createViewer(container: HTMLElement, initialWorld: World): Viewe
   }
 
   setWorld(initialWorld)
-  stage.setLoop(() => controls.update()) // update() gives the smooth "glide" after you let go
+  const overlay = new THREE.Group()
+  overlay.name = 'overlay'
+  stage.scene.add(overlay)
+  const frameListeners = new Set<(dt: number) => void>()
+  stage.setLoop((dt) => {
+    controls.update() // gives the smooth "glide" after you let go
+    for (const fn of frameListeners) fn(dt)
+  })
 
   let disposed = false
   return {
     setWorld,
+    overlay,
+    onFrame: (fn) => {
+      frameListeners.add(fn)
+      return () => frameListeners.delete(fn)
+    },
     loadScanMesh: async (url: string): Promise<void> => {
       const mesh = await loadScan(url)
       if (disposed) return // you left the screen while it was downloading

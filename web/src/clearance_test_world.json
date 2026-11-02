@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "source_scan": "example_living_room.usdz",
+  "room": {
+    "bounds": { "min": [-3, 0, -2.5], "max": [3, 2.5, 2.5] },
+    "floor_y": 0
+  },
+  "objects": [
+    { "id": "sofa_1", "label": "sofa", "role": "climbable", "confidence": 0.94, "position": [-1.8, 0.4, -1.8], "size": [2.0, 0.8, 0.9], "rotation_y": 0 },
+    { "id": "bookshelf_1", "label": "bookshelf", "role": "fixed", "confidence": 0.9, "position": [2.8, 1.0, -1.0], "size": [0.3, 2.0, 1.2], "rotation_y": 0 },
+    { "id": "table_1", "label": "coffee table", "role": "movable", "confidence": 0.88, "position": [1.5, 0.2, -1.95], "size": [1.1, 0.4, 0.6], "rotation_y": 1.5708 },
+    { "id": "chair_1", "label": "chair", "role": "movable", "confidence": 0.81, "position": [1.62, 0.45, -1.1], "size": [0.5, 0.9, 0.5], "rotation_y": 0 },
+    { "id": "rug_1", "label": "rug", "role": "passable", "confidence": 0.77, "position": [0.0, 0.01, 0.0], "size": [2.4, 0.02, 1.6], "rotation_y": 0 },
+    { "id": "door_1", "label": "door", "role": "passable", "confidence": 0.85, "position": [0.0, 1.0, 2.45], "size": [0.9, 2.0, 0.1], "rotation_y": 0 }
+  ],
+  "spawn": [-2.5, 0.0, 1.8],
+  "goal": [2.5, 0.0, -1.8]
+}
