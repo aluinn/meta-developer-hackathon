@@ -1,7 +1,7 @@
 // The "Clearance check" section of the Layout tab: pick who is walking (or any width), and see whether they can still get
 // from Start to Goal, plus the walkability score. The maths is in clearance.ts; the 3D drawing is in clearanceView.ts.
 
-import { checkClearance, PERSON_WIDTHS, snapNotes, summarise, WIDTH_SLIDER, type PersonKind } from './clearance.ts'
+import { checkClearance, PERSON_WIDTHS, personLabel, snapNotes, summarise, WIDTH_SLIDER, type PersonKind } from './clearance.ts'
 import { createClearanceView } from './clearanceView.ts'
 import type { Viewer } from './viewer.ts'
 import type { World } from './world.ts'
@@ -11,6 +11,10 @@ export interface ClearancePanel {
   setWorld: (world: World) => void
   /** Show or hide the drawings in the 3D view (the Layout tab was opened or closed). */
   setActive: (active: boolean) => void
+  /** The person's width now chosen, in metres. */
+  getWidth: () => number
+  /** Call `fn(width)` after every recalculation (width or room changed). Returns a function that stops it. */
+  onChange: (fn: (widthM: number) => void) => () => void
   /** Remove the section and the drawings, and free everything. */
   dispose: () => void
 }
@@ -113,25 +117,21 @@ export function createClearancePanel(container: HTMLElement, viewer: Viewer, ini
     how.append(el('p', undefined, text))
   }
 
-  const disclaimer = el('p', 'clearance-disclaimer', 'Sizes are estimates from phone LiDAR. This is a planning aid, not a safety assessment.')
-
-  section.append(title, hint, buttons, sliderRow, score, notes, pause, key, how, disclaimer, timing)
+  section.append(title, hint, buttons, sliderRow, score, notes, pause, key, how, timing)
   container.append(section)
 
   // ---- Working it out ----
-  function labelFor(w: number): string {
-    const kind = KINDS.find((k) => Math.abs(PERSON_WIDTHS[k].widthM - w) < 1e-6)
-    return kind ? PERSON_WIDTHS[kind].label : 'Custom width'
-  }
+  const listeners = new Set<(widthM: number) => void>()
 
   function recalculate(): void {
     const result = checkClearance(world, width)
     view.show(result, world)
-    score.textContent = summarise(result, labelFor(width))
+    score.textContent = summarise(result, personLabel(width))
     score.classList.toggle('is-reachable', result.reachable)
     score.classList.toggle('is-blocked', !result.reachable)
     notes.replaceChildren(...snapNotes(result).map((text) => el('li', undefined, text)))
     if (import.meta.env.DEV) timing.textContent = `Worked out in ${result.gridInfo.ms.toFixed(0)} ms (dev only)`
+    for (const fn of listeners) fn(width)
   }
 
   // Dragging the slider fires many times a second: work it out at most once per screen frame.
@@ -160,6 +160,11 @@ export function createClearancePanel(container: HTMLElement, viewer: Viewer, ini
       recalculate()
     },
     setActive: (active) => view.setVisible(active),
+    getWidth: () => width,
+    onChange: (fn) => {
+      listeners.add(fn)
+      return () => listeners.delete(fn)
+    },
     dispose: () => {
       cancelAnimationFrame(frame)
       view.dispose()

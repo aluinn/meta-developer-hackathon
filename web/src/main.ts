@@ -1,5 +1,6 @@
 import './style.css'
 import { createClearancePanel, type ClearancePanel } from './clearancePanel.ts'
+import { createLayoutAgentPanel, type LayoutAgentPanel } from './layoutAgentPanel.ts'
 import { setLayoutGoal } from './layoutGoal.ts'
 import { createLayoutPanel, type LayoutPanel } from './layoutPanel.ts'
 import { checkScanFile, processScan } from './api.ts'
@@ -23,14 +24,17 @@ let world: World | null = null
 let viewer: Viewer | null = null
 let play: PlayMode | null = null
 let layout: LayoutPanel | null = null // the Layout tab's panel (exists once it has been opened)
-let clearance: ClearancePanel | null = null // the clearance check, under the Layout panel (draws on the viewer)
+let agent: LayoutAgentPanel | null = null // the layout agent (suggest, before/after), under the voice panel (draws on the viewer)
+let clearance: ClearancePanel | null = null // the clearance check, under the layout agent (draws on the viewer)
 let layoutOpen = false
 // Bumped whenever we leave a mode, so a slow-loading play mode knows it's no longer wanted.
 let session = 0
 
 function closeAll(): void {
   session++
-  clearance?.dispose() // before the viewer it draws on
+  agent?.dispose() // these two draw on the viewer, so they go before it
+  agent = null
+  clearance?.dispose()
   clearance = null
   viewer?.dispose()
   viewer = null
@@ -58,17 +62,22 @@ function showViewer(): void {
   }
 }
 
-/** The Layout tab opens the panel (voice, then the clearance check); pressing it again closes it. The 3D view stays visible. */
+/** The Layout tab opens the panel (voice, the layout agent, then the clearance check); pressing it again closes it. The 3D view stays visible. */
 function toggleLayout(): void {
   if (!world || play) return
   layoutOpen = !layoutOpen
   if (layoutOpen) {
     layout ??= createLayoutPanel(screens.layoutContainer)
-    if (viewer) clearance ??= createClearancePanel(screens.layoutContainer, viewer, world)
+    if (viewer && !agent) {
+      agent = createLayoutAgentPanel(screens.layoutContainer, { viewer, viewArea: screens.viewContainer, world })
+      clearance = createClearancePanel(screens.layoutContainer, viewer, world)
+      agent.link(clearance)
+    }
   } else {
     layout?.stopRecording() // closing the panel must not leave the microphone on
   }
-  clearance?.setActive(layoutOpen) // the route and person only show while the Layout tab is open
+  agent?.setActive(layoutOpen) // the suggested layout, and the route and person, only show while the Layout tab is open
+  clearance?.setActive(layoutOpen)
   screens.setLayoutOpen(layoutOpen)
 }
 
