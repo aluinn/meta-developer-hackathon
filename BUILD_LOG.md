@@ -13,7 +13,7 @@ Add a new entry at the TOP after each work session. Copy the template.
 ```
 
 ## 2026-11-02 - Aluinn (front page)
-- What I did: New split-screen front page: Game mode (left, neon, faint game screenshot behind) and Work mode (right, blueprint look, faint model screenshot behind, four use cases). Hover grows a half; phones stack them. Work mode opens the labelled 3D model with a side panel (room width/depth/height and every object with role and size) and hides Play/Character; Game mode keeps Play, Layout, Character in a dark neon theme. Loading screen is now dark and branded. Also made the character smaller, mouse look calmer and 2 hazards instead of 3.
+- What I did: New split-screen front page in a flat, editorial style (no glow or gradients): Game mode on dark with an orange accent, Work mode on warm paper with a blue accent, each with a faint screenshot of our own app behind it. Work mode opens the labelled 3D model with a side panel (room size, every object with role and size); Game mode keeps Play, Layout, Character. Loading screen is flat dark. Also made the character smaller, mouse look calmer and 2 hazards instead of 3.
 - What worked / what didn't: Checked with real-browser screenshots on laptop and phone widths. The background pictures are screenshots of our own scan and game (no stock images, so no licence issue). Industry photos would need generating (Muse Image) or our own photos.
 - AI tools used (and for what): Claude Code built the page; the pictures are screenshots of our own app.
 - Next: Layout tab (Work mode could use it for moving furniture), tuning after play-testing.
