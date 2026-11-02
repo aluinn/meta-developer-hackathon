@@ -787,3 +787,455 @@ p:focus {
 .item-btn[data-item='heart'] { background: #fca5a5; }
 
 @keyframes race-shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+
+/* =====================================================================
+   Front page (split screen), mode themes, Loading, Work mode panel
+   ===================================================================== */
+
+/* Game mode is always dark and neon; Work mode is a clean blueprint-blue light theme. */
+body[data-mode='game'] {
+  --bg: #0d0f1a;
+  --panel: #171a2b;
+  --text: #f1f2fb;
+  --muted: #a6abc9;
+  --accent: #b388ff;
+  --accent-text: #120a24;
+  --border: #323759;
+  color-scheme: dark;
+}
+
+body[data-mode='work'] {
+  --bg: #eef3fb;
+  --panel: #ffffff;
+  --text: #10213d;
+  --muted: #53627f;
+  --accent: #1d5fd1;
+  --accent-text: #ffffff;
+  --border: #c6d3ea;
+  color-scheme: light;
+}
+
+.landing {
+  position: relative;
+  padding: 0;
+  overflow: hidden;
+  background: #090b14;
+  color: #fff;
+  --game: #b388ff;
+  --game-2: #35e0ff;
+  --work: #4f8bff;
+}
+
+.halves {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+.half {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 50dvh;
+  overflow: hidden;
+  transition: flex-grow 0.5s ease;
+}
+
+.half-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.3; /* the picture sits faintly behind the words */
+  transition: opacity 0.5s ease, transform 0.8s ease;
+}
+
+.half-game { background: linear-gradient(135deg, #1a0b3d 0%, #0a1030 60%, #06223a 100%); }
+.half-game .half-bg { background-image: linear-gradient(180deg, rgba(10, 8, 30, 0.4), rgba(10, 8, 30, 0.85)), url('/img/game-bg.jpg'); }
+.half-work { background: linear-gradient(225deg, #0b2147 0%, #0a1a38 60%, #08142b 100%); }
+.half-work .half-bg {
+  background-image: linear-gradient(180deg, rgba(7, 20, 45, 0.4), rgba(7, 20, 45, 0.85)), url('/img/work-bg.jpg');
+}
+
+/* Blueprint grid over the Work half. */
+.half-work::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(rgba(120, 165, 255, 0.12) 1px, transparent 1px), linear-gradient(90deg, rgba(120, 165, 255, 0.12) 1px, transparent 1px);
+  background-size: 36px 36px;
+  mask-image: radial-gradient(ellipse at center, #000 30%, transparent 85%);
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 30%, transparent 85%);
+}
+
+/* Glow in the Game half. */
+.half-game::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 20% 80%, rgba(179, 136, 255, 0.28), transparent 55%), radial-gradient(circle at 85% 15%, rgba(53, 224, 255, 0.18), transparent 50%);
+}
+
+.half-inner {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 34rem;
+  padding: 5.5rem 1.5rem 2.5rem;
+}
+
+.half-eyebrow {
+  margin-bottom: 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+}
+
+.half-game .half-eyebrow { color: var(--game-2); }
+.half-work .half-eyebrow { color: #8db4ff; }
+
+.half-title {
+  margin: 0 0 0.8rem;
+  font-size: clamp(2rem, 4.2vw, 3.4rem);
+  line-height: 1.02;
+  letter-spacing: -0.01em;
+}
+
+.half-game .half-title {
+  font-weight: 900;
+  font-style: italic;
+  text-transform: uppercase;
+  text-shadow: 0 0 28px rgba(179, 136, 255, 0.6);
+}
+
+.half-work .half-title { font-weight: 700; }
+
+.half-text {
+  max-width: 28rem;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 1.02rem;
+}
+
+.half-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1.1rem 0 1.4rem;
+  padding: 0;
+  list-style: none;
+}
+
+.half-chips li {
+  padding: 0.3rem 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.half-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.landing-btn {
+  min-height: 3.25rem;
+  padding: 0.7rem 1.5rem;
+  border: 2px solid transparent;
+  font: inherit;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  color: #fff;
+  touch-action: manipulation;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.landing-btn:hover { transform: translateY(-2px); }
+.landing-btn:active { transform: scale(0.98); }
+
+.landing-btn-ghost {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.35);
+  font-weight: 600;
+  border-radius: 0.6rem;
+}
+
+.landing-btn-ghost:hover { background: rgba(255, 255, 255, 0.14); }
+
+.half-game .landing-btn-primary {
+  background: linear-gradient(90deg, #8a4dff, #35b6ff);
+  border-radius: 999px;
+  text-transform: uppercase;
+  font-style: italic;
+  box-shadow: 0 0 0 0 rgba(179, 136, 255, 0.7), 0 8px 26px rgba(90, 60, 255, 0.5);
+  animation: landing-pulse 2.4s ease-out infinite;
+}
+
+.half-game .landing-btn-ghost { border-radius: 999px; }
+
+.half-work .landing-btn-primary {
+  background: #2f6fe4;
+  border-radius: 0.5rem;
+  box-shadow: 0 8px 22px rgba(30, 90, 220, 0.4);
+}
+
+@keyframes landing-pulse {
+  70% { box-shadow: 0 0 0 16px rgba(179, 136, 255, 0), 0 8px 26px rgba(90, 60, 255, 0.5); }
+  100% { box-shadow: 0 0 0 0 rgba(179, 136, 255, 0), 0 8px 26px rgba(90, 60, 255, 0.5); }
+}
+
+.cases {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  margin: 1.6rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.case {
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(141, 180, 255, 0.28);
+  border-radius: 0.6rem;
+  background: rgba(10, 30, 70, 0.55);
+  font-size: 0.78rem;
+  line-height: 1.3;
+}
+
+.case strong { display: block; font-size: 0.86rem; margin-bottom: 0.1rem; }
+.case span span { color: rgba(255, 255, 255, 0.72); }
+.case-icon { flex: 0 0 1.6rem; color: #8db4ff; }
+.case-icon svg { width: 1.6rem; height: 1.6rem; }
+
+/* The seam: a glowing line down the middle with the logo on it. */
+.seam {
+  position: absolute;
+  z-index: 3;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  background: linear-gradient(90deg, #b388ff, #ffffff, #4f8bff);
+  box-shadow: 0 0 18px rgba(160, 160, 255, 0.9);
+  pointer-events: none;
+}
+
+.seam-badge {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 3.6rem;
+  height: 3.6rem;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: #0b0d18;
+  border: 2px solid #fff;
+  color: #fff;
+  box-shadow: 0 0 24px rgba(160, 160, 255, 0.8);
+}
+
+.seam-badge svg { width: 1.9rem; height: 1.9rem; }
+
+.landing-brand {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: max(0.9rem, env(safe-area-inset-top)) 1rem 0;
+  text-align: center;
+  pointer-events: none;
+}
+
+.landing-brand h1 {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 900;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.7);
+}
+
+.landing-brand p { font-size: 0.78rem; color: rgba(255, 255, 255, 0.7); }
+
+.landing-notes {
+  position: absolute;
+  z-index: 5;
+  left: 50%;
+  bottom: 2.6rem;
+  width: min(92vw, 34rem);
+  transform: translateX(-50%);
+  text-align: center;
+}
+
+.landing-notes .file-info,
+.landing-notes .error {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border-radius: 0.6rem;
+  background: rgba(10, 12, 24, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  font-size: 0.9rem;
+}
+
+.landing-notes .error { color: #ff9a92; border-color: #ff9a92; }
+.landing-notes .file-info:empty,
+.landing-notes .error:empty { display: none; }
+
+.landing-foot {
+  position: absolute;
+  z-index: 4;
+  bottom: 0.7rem;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.5);
+  pointer-events: none;
+}
+
+.landing-dev {
+  position: absolute;
+  z-index: 5;
+  left: 0.5rem;
+  bottom: 0.5rem;
+  font-size: 0.7rem;
+  opacity: 0.6;
+}
+
+/* Wide screens: two halves side by side, the seam runs down the middle. */
+@media (min-width: 860px) {
+  .halves { flex-direction: row; }
+  .half { min-height: 100dvh; align-items: flex-start; }
+  .half-inner { padding: 7rem 2.5rem 4rem; }
+  .half-game .half-inner { margin-left: auto; padding-right: 4rem; }
+  .half-work .half-inner { margin-right: auto; padding-left: 4rem; }
+  .halves:hover .half { flex-grow: 0.85; }
+  .halves .half:hover { flex-grow: 1.35; }
+  .half:hover .half-bg { opacity: 0.5; transform: scale(1.04); }
+
+  .seam {
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    right: auto;
+    width: 2px;
+    height: auto;
+    background: linear-gradient(180deg, transparent, #b388ff 20%, #ffffff 50%, #4f8bff 80%, transparent);
+  }
+
+  .landing-brand { top: 0; }
+}
+
+@media (max-width: 859px) {
+  .half { padding: 0; }
+  .half-inner { padding: 3.2rem 1.25rem 1.8rem; }
+  .half-work .half-inner { padding-top: 2.6rem; }
+  .cases { grid-template-columns: 1fr; }
+  .landing-brand p { display: none; }
+  .landing-notes { bottom: 1.6rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .half, .half-bg, .landing-btn { transition: none; }
+  .half-game .landing-btn-primary { animation: none; }
+}
+
+/* ---- Loading: dark and branded in both modes ---- */
+
+.screen-loading {
+  max-width: none;
+  background: radial-gradient(circle at 50% 40%, #1a2150, #090b14 70%);
+  color: #fff;
+}
+
+.screen-loading .lead { color: rgba(255, 255, 255, 0.85); }
+.screen-loading .spinner { border-color: rgba(255, 255, 255, 0.2); border-top-color: #b388ff; }
+
+/* ---- Results: game mode gets neon touches, work mode gets a side panel ---- */
+
+.work-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 1rem;
+}
+
+.work-panel { display: none; }
+
+.screen-results[data-mode='work'] .tabbar { display: none; }
+.screen-results[data-mode='work'] .results-header h1 { color: var(--text); }
+
+.screen-results[data-mode='work'] .work-panel {
+  display: block;
+  flex: 0 0 18rem;
+  overflow-y: auto;
+  padding: 1rem;
+  border: 2px solid var(--border);
+  border-radius: 1rem;
+  background: var(--panel);
+}
+
+.work-panel h2 {
+  margin: 0 0 0.5rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.work-size {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin: 0 0 1.2rem;
+}
+
+.work-size div { padding: 0.5rem; border-radius: 0.6rem; background: var(--bg); text-align: center; }
+.work-size dt { font-size: 0.7rem; color: var(--muted); }
+.work-size dd { margin: 0; font-weight: 700; font-size: 0.95rem; }
+
+.work-objects { margin: 0; padding: 0; list-style: none; }
+
+.work-objects li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0 0.5rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+.work-role { justify-self: end; font-size: 0.72rem; font-weight: 700; color: var(--accent); text-transform: uppercase; }
+.work-dims { grid-column: 1 / -1; font-size: 0.78rem; color: var(--muted); }
+
+.screen-results[data-mode='game'] .tabbar { border-color: var(--accent); box-shadow: 0 0 18px rgba(179, 136, 255, 0.25); }
+.screen-results[data-mode='game'] .tab[aria-selected='true'] { background: linear-gradient(90deg, #8a4dff, #35b6ff); color: #fff; }
+
+.screen-results.playing .work-panel { display: none !important; }
+
+@media (max-width: 859px) {
+  .work-body { flex-direction: column; }
+  .screen-results[data-mode='work'] .work-panel { flex: 0 0 auto; max-height: 34vh; }
+}
+
+.half-game .case { border-color: rgba(179, 136, 255, 0.35); background: rgba(40, 20, 90, 0.45); }
+.case-key strong { color: #35e0ff; font-size: 1rem; letter-spacing: 0.04em; }
+
+/* Keyboard hints make no sense on a phone; the three tabs sit in one row. */
+@media (max-width: 859px) {
+  .half-game .cases { display: none; }
+}
+
+.tabbar { grid-template-columns: repeat(3, 1fr); }
+.screen-results[data-mode='work'] .tabbar { display: none; }
