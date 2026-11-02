@@ -12,6 +12,18 @@ Add a new entry at the TOP after each work session. Copy the template.
 - Next:
 ```
 
+## 2026-11-02 - Aluinn (smoother play)
+- What I did: Removed fall damage (lives are only lost to rolling hazards; falling off the scan just puts you back at the last gate). Smoother movement: the character now speeds up and slows down over about a tenth of a second instead of snapping, steers a bit less sharply in the air, and loses its speed when it hits a wall. Added a soft shadow under the character that shows where you will land (the 2D-picture-in-3D-room depth problem) and raised the default camera angle a little so jumps are easier to judge.
+- What worked / what didn't: Rules, course, camera and physics tests pass; a browser run showed the shadow under a jump. Not yet tried by a person: tune `groundAccel`, `groundBrake`, `airAccel` in `web/src/motion.ts`, and the camera `pitch` in `profile.ts`.
+- AI tools used (and for what): Claude Code wrote and tested the changes.
+- Next: Play-test the feel; Layout tab.
+
+## 2026-11-02 - Aluinn (front page)
+- What I did: New split-screen front page in a clean Meta-style look: Game mode on deep navy, Work mode on white, Meta blue pill buttons, each half with a faint screenshot of our own app behind it. Screens fade into each other (old fades out on top, new fades in; the chosen half grows to fill the screen). Work mode opens the labelled 3D model with a side panel (room size, every object with role and size); Game mode keeps Play, Layout, Character. Results and loading screens use navy (game) or light grey and white (work). Also made the character smaller, mouse look calmer and 2 hazards instead of 3.
+- What worked / what didn't: Checked with real-browser screenshots on laptop and phone widths. The background pictures are screenshots of our own scan and game (no stock images, so no licence issue). Industry photos would need generating (Muse Image) or our own photos.
+- AI tools used (and for what): Claude Code built the page; the pictures are screenshots of our own app.
+- Next: Layout tab (Work mode could use it for moving furniture), tuning after play-testing.
+
 ## 2026-11-02 - Aluinn
 - What I did: Made the race more of a parkour game. You have 3 lives; a hit from a rolling ball or a long fall costs one (a fall sends you back to the last gate). Added an Extra life item, a Shield now also breaks one fall, and Wings stop falls. More gates and item boxes sit on top of furniture. Camera: click the view and the mouse steers it (look up, down, left, right); the camera no longer swings behind you while the mouse is in charge, and you can now look up.
 - What worked / what didn't: Offline tests (rules, course, camera) pass, and a real-browser run showed hearts, a lost life from a hit and from a fall, and the end screens. Pointer lock itself can't be tested in a headless browser, so the mouse feel needs a human try.

@@ -29,7 +29,7 @@ const KEYS = {
 }
 const GAME_KEYS = new Set(Object.values(KEYS).flat())
 const STICK_DEADZONE = 0.15
-const MOUSE_LOOK_SPEED = 0.7 // captured-mouse movement is scaled a little so it feels calm
+const MOUSE_LOOK_SPEED = 0.3 // captured-mouse movement is scaled a little so it feels calm
 
 /** True on phones and tablets (and touch laptops): show the on-screen controls. */
 export function hasTouch(): boolean {

@@ -19,6 +19,7 @@ import { GOAL_MARKER, OBJECT_LABEL, SPAWN_MARKER } from './roomScene.ts'
 import { extractTriangles } from './scanCollider.ts'
 import { loadScanMesh, scanMeshUrl } from './scanMesh.ts'
 import { createProbe } from './probe.ts'
+import { createBlobShadow } from './shadow.ts'
 import { createStage } from './stage.ts'
 import { buildGraph, type Graph } from './walkGraph.ts'
 import type { Vec3, World } from './world.ts'
@@ -77,6 +78,8 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
   })
   const model = await createCharacter() // the player's picture, the default bean, or simple shapes
   stage.scene.add(model)
+  const shadow = createBlobShadow(CHARACTER.radius * 1.7)
+  stage.scene.add(shadow.mesh)
 
   // ---- Physics ----
   const floorY = world.room.floor_y
@@ -155,8 +158,6 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
   let sceneTime = 0
   let nextSeed = 1 + Math.floor(Math.random() * 1_000_000)
   let endShown = false
-  let airborne = false // were we in the air last frame?
-  let lastStandY = spawnFeet.y // the height of the last place we stood (to measure a fall from)
   const knock = { x: 0, z: 0, t: 0 } // a short shove away from a hazard that hit you
   const bestKey = `roomworld.best.${world.source_scan}`
 
@@ -192,7 +193,7 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
     if (CLASSIC) return
     const seed = nextSeed++
     const course = generateCourse(getGraph(), [spawnFeet.x, spawnFeet.y, spawnFeet.z], {
-      seed, checkpoints: 4, hazards: 3, unit: CHARACTER.height, runSpeed: MOVE.runSpeed, elevatedMin: CHARACTER.height * 0.5,
+      seed, checkpoints: 4, hazards: 2, unit: CHARACTER.height, runSpeed: MOVE.runSpeed, elevatedMin: CHARACTER.height * 0.5,
     })
     if (!course) return
     const game = new Game(course, { unit: CHARACTER.height, runSpeed: MOVE.runSpeed, seed })
@@ -229,16 +230,8 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
           knock.z = e.dirZ
           knock.t = KNOCKBACK_SECONDS
           break
-        case 'fall':
-          raceHud.banner(e.blocked ? 'Your shield broke your fall!' : `You fell! Lost a life: ${game.lives} left`, e.blocked ? 'good' : 'bad')
-          break
         case 'life':
           if (e.reason === 'heart') raceHud.banner(`Extra life! ${e.lives} lives`, 'good')
-          if (e.reason === 'fall' && game.phase === 'running') {
-            respawn() // back to the last gate
-            lastStandY = race?.game.respawnPoint()[1] ?? lastStandY
-            airborne = false
-          }
           break
         case 'livesFull': raceHud.banner('You already have all your lives', 'info'); break
         case 'flagTired': raceHud.banner('The flag is tired: now!', 'info'); break
@@ -299,8 +292,6 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
     facing = facingStart()
     knock.t = 0
     respawn()
-    lastStandY = spawnFeet.y
-    airborne = false
   }
   restart.addEventListener('click', restartRun)
 
@@ -366,6 +357,7 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
     drawFeet.lerpVectors(prevCentre, currCentre, alpha)
     drawFeet.y -= CHARACTER.height / 2
     model.position.copy(drawFeet)
+    shadow.update(physics, drawFeet, CHARACTER.height, character.collider)
     if (speed > 0.1) {
       const wanted = Math.atan2(wishX, wishZ)
       facing += angleDiff(facing, wanted) * Math.min(1, 15 * dt)
@@ -378,27 +370,8 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
     cam.update(dt, drawFeet, facing, runningAway, input.takeLook(), clearDistance)
 
     const feetY = currCentre.y - CHARACTER.height / 2
-    // Fell out of the world? That costs a life in the race (and sends you back to the last gate).
-    if (feetY < floorY - FALL_LIMIT) {
-      if (race) handleEvents(race.game.fellOut())
-      else respawn()
-      if (race && race.game.phase === 'running') respawn()
-      lastStandY = feetY
-      airborne = false
-    }
-    // Parkour: a long drop from where you last stood costs a life. (Wings carry you, so flying counts as standing.)
-    if (game) {
-      if (mods.flying) {
-        lastStandY = feetY
-        airborne = false
-      } else if (motion.grounded) {
-        if (airborne) handleEvents(game.landed(lastStandY - feetY))
-        airborne = false
-        lastStandY = feetY
-      } else {
-        airborne = true
-      }
-    }
+    // Fell out of the world (off the edge of the scan)? No penalty: back to the last gate.
+    if (feetY < floorY - FALL_LIMIT) respawn()
     if (game && race && raceHud) {
       // The race: tell the rules where the player is, and show what happened.
       handleEvents(game.update(dt, [currCentre.x, feetY, currCentre.z]))
@@ -443,11 +416,6 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
         physics.step()
         readCentre(prevCentre)
         readCentre(currCentre)
-      },
-      // Pretend we last stood `height` metres higher up and are now in the air (so landing counts as a fall).
-      dropFrom: (height: number) => {
-        lastStandY = currCentre.y - CHARACTER.height / 2 + height
-        airborne = true
       },
       profile: () => ({ unit: CHARACTER.height, runSpeed: MOVE.runSpeed }),
     }

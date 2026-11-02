@@ -16,7 +16,7 @@ export const ITEM_INFO: Record<ItemKind, { name: string; seconds: number; blurb:
   boost: { name: 'Boost', seconds: 4, blurb: 'Run much faster', weight: 28 },
   spring: { name: 'Super jump', seconds: 10, blurb: 'Jump twice as high', weight: 20 },
   wings: { name: 'Wings', seconds: 6, blurb: 'Hold Jump to fly', weight: 14 },
-  shield: { name: 'Shield', seconds: 12, blurb: 'Blocks one hit or one hard fall', weight: 22 },
+  shield: { name: 'Shield', seconds: 12, blurb: 'Blocks one hit', weight: 22 },
   freeze: { name: 'Freeze', seconds: 4, blurb: 'Freezes the flag', weight: 16 },
   heart: { name: 'Extra life', seconds: 0, blurb: 'Get a life back', weight: 18 }, // only rolled when you are down a life
 }
@@ -24,8 +24,7 @@ export const ITEM_INFO: Record<ItemKind, { name: string; seconds: number; blurb:
 export const TUNING = {
   countdownSeconds: 3,
   checkpointBonus: 8, // seconds added at every gate
-  lives: 3, // you lose one when a hazard hits you or you fall from height; at none, the race is over
-  fallLimit: 1.6, // a drop of this many character-heights (from where you last stood) costs a life
+  lives: 3, // you lose one when a hazard hits you; at none, the race is over. Falling never costs a life.
   stunSeconds: 0.8,
   invulnerableSeconds: 2,
   itemRespawnSeconds: 12,
@@ -54,8 +53,7 @@ export type GameEvent =
   | { type: 'use'; kind: ItemKind }
   | { type: 'effectEnd'; kind: ItemKind }
   | { type: 'hit'; blocked: boolean; dirX: number; dirZ: number }
-  | { type: 'fall'; blocked: boolean; drop: number } // you landed after a long drop
-  | { type: 'life'; lives: number; reason: 'hazard' | 'fall' | 'heart' } // your life count changed
+  | { type: 'life'; lives: number; reason: 'hazard' | 'heart' } // your life count changed
   | { type: 'livesFull' } // you tried to use an Extra life while at full health
   | { type: 'flagTired' }
   | { type: 'flagDash' }
@@ -211,7 +209,7 @@ export class Game {
   }
 
   // ---- lives ----
-  private loseLife(reason: 'hazard' | 'fall'): GameEvent[] {
+  private loseLife(reason: 'hazard'): GameEvent[] {
     this.lives = Math.max(0, this.lives - 1)
     const events: GameEvent[] = [{ type: 'life', lives: this.lives, reason }]
     if (this.lives === 0) {
@@ -219,24 +217,6 @@ export class Game {
       events.push({ type: 'lose', reason: 'lives' })
     }
     return events
-  }
-
-  /** The player landed `drop` metres below where they last stood. A long drop costs a life (a Shield takes one hard fall; Wings prevent it). */
-  landed(drop: number): GameEvent[] {
-    if (this.phase !== 'running' || this.effects.wings > 0 || drop < this.cfg.unit * TUNING.fallLimit) return []
-    if (this.effects.shield > 0) {
-      this.effects.shield = 0
-      return [{ type: 'fall', blocked: true, drop }, { type: 'effectEnd', kind: 'shield' }]
-    }
-    this.invulnerable = Math.max(this.invulnerable, 1)
-    return [{ type: 'fall', blocked: false, drop }, ...this.loseLife('fall')]
-  }
-
-  /** The player fell out of the world (below the floor): a life, and back to the last gate. */
-  fellOut(): GameEvent[] {
-    if (this.phase !== 'running') return []
-    this.invulnerable = Math.max(this.invulnerable, 1)
-    return [{ type: 'fall', blocked: false, drop: Infinity }, ...this.loseLife('fall')]
   }
 
   // ---- hazards ----
