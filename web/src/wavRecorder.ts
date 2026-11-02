@@ -46,6 +46,7 @@ export const MIN_SECONDS = 0.5
 const SILENCE_PEAK = 0.001
 /** How long we keep listening after "stop" so the last chunks still in flight arrive. */
 const TAIL_MS = 150
+const AUDIO_START_MS = 2000 // how long we wait for the audio system to start
 const CHUNK = 1024 // samples per message from the worklet (about 20 ms)
 
 // The mini-program for the audio thread, as text (so no extra file is needed). It averages the
@@ -107,9 +108,9 @@ export async function startRecording(): Promise<Recording> {
   if (typeof AudioContext === 'undefined') throw voiceError('unsupported')
 
   // Make the audio system BEFORE the first `await`: iPhones only let it start while we are still
-  // inside the tap that called us.
+  // inside the tap that called us. (Not awaited here: it can stay pending until the mic is allowed.)
   const ctx = new AudioContext()
-  const resumed = ctx.resume().catch(() => undefined)
+  void ctx.resume().catch(() => undefined)
 
   let stream: MediaStream
   try {
@@ -120,7 +121,15 @@ export async function startRecording(): Promise<Recording> {
     void ctx.close()
     throw micError(err)
   }
-  await resumed
+
+  // Once the microphone is allowed, browsers let the audio system run. Ask again, but never wait
+  // forever: if it still won't start, say so rather than leave the button frozen.
+  await Promise.race([ctx.resume().catch(() => undefined), sleep(AUDIO_START_MS)])
+  if (ctx.state !== 'running') {
+    for (const track of stream.getTracks()) track.stop()
+    void ctx.close()
+    throw voiceError('failed')
+  }
 
   const chunks: Float32Array[] = []
   let sampleCount = 0
