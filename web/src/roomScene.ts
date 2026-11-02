@@ -15,6 +15,11 @@ const OUTLINE_COLOR = 0x1b1f2a
 export const OBJECT_LABEL = 'object-label'
 export const SPAWN_MARKER = 'spawn-marker'
 export const GOAL_MARKER = 'goal-marker'
+export const OBJECT_BODY = 'object-body'
+
+/** How the boxes are drawn: solid (no scan picture), faint overlays on top of the scan picture, or not at all (play mode: the scan IS the room). */
+export type BoxStyle = 'boxes' | 'overlay' | 'hidden'
+const OVERLAY_OPACITY = 0.22
 
 function buildFloor(world: World): THREE.Mesh {
   const { min, max } = world.room.bounds
@@ -65,6 +70,8 @@ function buildObject(obj: WorldObject): THREE.Group {
       depthWrite: look.opacity >= 1,
     }),
   )
+  body.name = OBJECT_BODY
+  body.userData.baseOpacity = look.opacity
   body.position.fromArray(obj.position) // the centre of the box
   body.rotation.y = obj.rotation_y
   const edges = new THREE.LineSegments(
@@ -106,6 +113,21 @@ function buildMarker(at: Vec3, look: Look, shape: 'ball' | 'cone', name: string)
   group.add(disc, pole, top, label)
   group.position.fromArray(at)
   return group
+}
+
+/** Switch how the boxes (and the grey floor plane) are drawn, in place. Safe to call again and again. */
+export function setBoxStyle(room: THREE.Object3D, style: BoxStyle): void {
+  room.traverse((o) => {
+    if (o.name === 'floor') o.visible = style === 'boxes' // the scan has its own floor
+    if (o.name !== OBJECT_BODY || !(o instanceof THREE.Mesh)) return
+    const base = o.userData.baseOpacity as number
+    const material = o.material as THREE.MeshStandardMaterial
+    o.visible = style !== 'hidden'
+    material.opacity = style === 'overlay' ? Math.min(base, OVERLAY_OPACITY) : base
+    material.transparent = style === 'overlay' || base < 1
+    material.depthWrite = style !== 'overlay' && base >= 1
+    material.needsUpdate = true
+  })
 }
 
 /** Everything for one room, in one group. Free it with disposeChildren() when done. */

@@ -10,6 +10,7 @@ import { createInput, hasTouch } from './input.ts'
 import { MOVE, newMotionState, stepCharacter } from './motion.ts'
 import { CHARACTER, FIXED_DT, buildPhysicsWorld, createCharacterBody, freePhysics, initPhysics } from './physics.ts'
 import { OBJECT_LABEL, SPAWN_MARKER } from './roomScene.ts'
+import { loadScanMesh, scanMeshUrl } from './scanMesh.ts'
 import { createStage } from './stage.ts'
 import type { World } from './world.ts'
 
@@ -41,6 +42,17 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
   // ---- Drawing ----
   const stage = createStage(container)
   stage.setRoom(world)
+  // If this world came from a scan, you play in the scanned room itself. The boxes stay in the physics (they are what you bump into and
+  // jump onto) but are not drawn. If the scan cannot be loaded, the boxes are drawn as before.
+  const scanUrl = scanMeshUrl(world)
+  if (scanUrl) {
+    try {
+      stage.scanLayer.add(await loadScanMesh(scanUrl))
+      stage.setBoxStyle('hidden')
+    } catch {
+      // keep the boxes
+    }
+  }
   // Keep the view clear while playing: no furniture labels, and no Start pole sticking through
   // the character. The Goal marker stays, so you can always see where to go.
   stage.scene.traverse((obj) => {

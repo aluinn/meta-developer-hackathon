@@ -1,11 +1,13 @@
 import json
 import os
+import re
 import subprocess
 import sys
 import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 
 SERVER_DIR = Path(__file__).resolve().parent
 SCANS_DIR = Path(os.environ.get("SCANS_DIR") or SERVER_DIR / "scans")  # set SCANS_DIR to use a mounted disk
@@ -36,6 +38,17 @@ def upload_scan(file: UploadFile = File(...)) -> dict[str, str | int]:
         raise
 
     return {"scan_id": scan_id, "triangles_before": result["triangles_before"], "triangles_after": result["triangles_after"]}
+
+
+@router.get("/scan/{scan_id}/mesh")
+def get_scan_mesh(scan_id: str) -> FileResponse:
+    """The scan itself (with its colours), for the website's 3D view. It is the compact original.glb the upload step saved."""
+    if not re.fullmatch(r"[0-9a-f]{32}", scan_id):
+        raise HTTPException(400, "Invalid scan_id.")
+    path = SCANS_DIR / scan_id / "original.glb"
+    if not path.exists():
+        raise HTTPException(404, "No such scan.")
+    return FileResponse(path, media_type="model/gltf-binary")
 
 
 def _prepare(scan_dir: Path) -> dict:
