@@ -22,7 +22,7 @@ export function mixToMono(channels: Float32Array[]): Float32Array {
 }
 
 /**
- * Shrink `samples` recorded at `fromRate` down to `toRate` (default 16 kHz).
+ * Change `samples` recorded at `fromRate` to `toRate` (default 16 kHz). Normally this SHRINKS them (48 kHz -> 16 kHz).
  *
  * Each new sample is the AVERAGE of the old samples that fall inside its time slot. For 48 kHz -> 16 kHz
  * that is the average of 3 old samples. Averaging (rather than just skipping samples) acts as a simple
@@ -30,9 +30,9 @@ export function mixToMono(channels: Float32Array[]): Float32Array {
  * When the rates don't divide evenly (44.1 kHz -> 16 kHz) the old samples at the edges of a slot
  * count only for the part of them that lies inside it.
  */
-export function downsample(samples: Float32Array, fromRate: number, toRate = TARGET_RATE): Float32Array {
+export function resample(samples: Float32Array, fromRate: number, toRate = TARGET_RATE): Float32Array {
   if (fromRate === toRate) return samples
-  if (fromRate < toRate) throw new Error(`Cannot go from ${fromRate} Hz up to ${toRate} Hz`)
+  if (fromRate < toRate) return stretch(samples, fromRate, toRate)
   const ratio = fromRate / toRate // old samples per new sample, e.g. 3 or 2.75625
   const outLength = Math.floor(samples.length / ratio)
   const out = new Float32Array(outLength)
@@ -48,6 +48,19 @@ export function downsample(samples: Float32Array, fromRate: number, toRate = TAR
       sum += (samples[first] ?? 0) * overlap
     }
     out[i] = sum / ratio
+  }
+  return out
+}
+
+/** The rare opposite case (a microphone slower than 16 kHz): draw straight lines between the old samples. */
+function stretch(samples: Float32Array, fromRate: number, toRate: number): Float32Array {
+  const out = new Float32Array(Math.floor((samples.length * toRate) / fromRate))
+  for (let i = 0; i < out.length; i++) {
+    const position = (i * fromRate) / toRate
+    const before = Math.floor(position)
+    const a = samples[before] ?? 0
+    const b = samples[before + 1] ?? a
+    out[i] = a + (b - a) * (position - before)
   }
   return out
 }
@@ -93,5 +106,5 @@ export function encodeWav(samples: Int16Array, sampleRate = TARGET_RATE): Blob {
 
 /** Everything in one go: channels recorded at `rate` Hz -> a 16 kHz mono 16-bit WAV. */
 export function samplesToWav(channels: Float32Array[], rate: number): Blob {
-  return encodeWav(floatTo16(downsample(mixToMono(channels), rate)))
+  return encodeWav(floatTo16(resample(mixToMono(channels), rate)))
 }
