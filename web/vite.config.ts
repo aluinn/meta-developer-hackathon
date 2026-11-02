@@ -5,9 +5,9 @@ export default defineConfig({
     // Lets the dev server read ../shared (the world.json contract) which sits outside /web.
     fs: { allow: ['..'] },
   },
-  // Prepare three.js up front. Otherwise Vite finds it mid-session, re-prepares it,
-  // and the first click on "Use example room" can fail until you refresh.
+  // Prepare three.js and Rapier up front. Otherwise Vite finds them mid-session, re-prepares
+  // them, and the first click on "Use example room" or "Play" can fail until you refresh.
   optimizeDeps: {
-    include: ['three', 'three/addons/controls/OrbitControls.js'],
+    include: ['three', 'three/addons/controls/OrbitControls.js', '@dimforge/rapier3d-compat'],
   },
 })
