@@ -19,15 +19,38 @@ def _png(rgb: np.ndarray) -> bytes:
     return buffer.getvalue()
 
 
-def render_views(scan_dir: Path) -> tuple[trimesh.Trimesh, list[View], str]:
+def load_mesh_and_colours(scan_dir: Path) -> tuple[trimesh.Trimesh, np.ndarray, str]:
     mesh = trimesh.load(scan_dir / "simplified.glb", force="mesh")
     original_path = next(scan_dir.glob("original.*"), None)
     colors, colour_source = np.full((len(mesh.vertices), 3), 170, dtype=np.uint8), "none"
     if original_path is not None:
         original = trimesh.load(original_path, force="mesh")
         colors, colour_source = vertex_colors_from_original(mesh, original)
+    return mesh, colors, colour_source
+
+
+def render_views(scan_dir: Path) -> tuple[trimesh.Trimesh, list[View], str]:
+    mesh, colors, colour_source = load_mesh_and_colours(scan_dir)
     views = [render_view(mesh, colors, cam, i) for i, cam in enumerate(make_cameras(mesh))]
     return mesh, views, colour_source
+
+
+def save_masks(views_dir: Path, detections: list[Detection]) -> None:
+    """Keep every SAM mask (A6 compares against them). Key: v<view>__<prompt>__<n>__c<confidence x1000>."""
+    masks = {f"v{d.view_index}__{d.prompt}__{i}__c{round(d.confidence * 1000)}": d.mask for i, d in enumerate(detections)}
+    np.savez_compressed(views_dir / "masks.npz", **masks)
+
+
+def load_masks(scan_dir: Path) -> list[Detection]:
+    path = scan_dir / "views" / "masks.npz"
+    if not path.exists():
+        raise FileNotFoundError("This scan has no saved masks. Run POST /scan/{scan_id}/label again.")
+    detections = []
+    with np.load(path) as data:
+        for key in data.files:
+            view, prompt, _, conf = key.split("__")
+            detections.append(Detection(int(view[1:]), prompt, int(conf[1:]) / 1000, data[key]))
+    return detections
 
 
 async def label_scan(scan_dir: Path, segmenter: Segmenter, labeller_name: str, prompts: list[str] = PROMPTS) -> dict:
@@ -44,6 +67,7 @@ async def label_scan(scan_dir: Path, segmenter: Segmenter, labeller_name: str, p
 
     views_dir = scan_dir / "views"
     views_dir.mkdir(exist_ok=True)
+    save_masks(views_dir, detections)
     for v in views:
         (views_dir / f"view_{v.index}.png").write_bytes(png_by_view[v.index])
         np.save(views_dir / f"view_{v.index}_face_id.npy", v.face_id)

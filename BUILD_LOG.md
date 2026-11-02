@@ -22,6 +22,38 @@ Add a new entry at the TOP after each work session. Copy the template.
 
 ---
 
+## 2026-11-01 - Aluinn (A6 + CORS)
+- What I did: `GET /score/{scan_id}` (`score.py`, `labelling/match_score.py`): rebuilds the room from world.json (boxes, coloured from where the scan found each object), renders it from A2's cameras, runs SAM on the renders, and compares per-object masks with the masks from the scan as IoU. Returns an overall percentage, per-object scores and unmatched scan detections; cached in `score.json`. A2 now saves every mask (`views/masks.npz`). Method written up in `docs/architecture.md`. CORS added (`ALLOWED_ORIGINS`, default localhost:5173), `SCANS_DIR` setting, `Dockerfile`, `.dockerignore`, `render.yaml`, `docs/deployment.md` (options and recommendation: Render).
+- What worked / what didn't: `test_score_synthetic.py` passes: a faithful world ~82% (capped by the fake SAM's pixel noise), a table moved 1.2 m drops to 0% while other objects stay ~82%, a deleted sofa is reported as unmatched, caching/refresh and error codes work. The test caught a flaw in my first design (objects were coloured from the scan at their world.json position, so a misplaced object turned floor-coloured and was skipped instead of penalised); fixed by colouring from where A2 found the object. Checked locally with the Dockerfile's start command: /health ok, CORS allows only the listed origins, uploads go to SCANS_DIR. NOT done: the actual deploy and a test of the deployed /health (needs your Render account and key; Docker is not installed here so the image was not built). Real SAM scores on a real scan are untested.
+- AI tools used (and for what): Claude Code, to research hosts and write the code, tests and docs.
+- Next: deploy on Render with the steps in docs/deployment.md, send me the URL to test /health, then the real-key testing round.
+
+---
+
+## 2026-11-01 - Aluinn (A5)
+- What I did: `POST /render` (`photo_render.py`, `labelling/muse_image.py`): takes a room photo plus old and new world.json, works out which objects moved, describes each move in plain words anchored on nearby objects, and calls Muse Image `POST /v1/images/edits` (JSON `images` array, `size` = photo aspect, png) to move only those. Saves `render/before.png` and `after.png`, served by `GET /render/{scan_id}/before|after`. Adds `changed_fraction` / `likely_changed_too_much` (the cookbook says to check unchanged areas still match). Also `scripts/make_character.py` and `docs/character-prompt.md` for the original character (white background keyed out, since Muse Image ignores transparency).
+- What worked / what didn't: offline test passes (exact request fields, prompt wording, 503 retry, 502 without leaking the key, only-moves validation, bad photos, key-out of the white background). Reading the generated prompt showed "touching" was used for a 15 cm gap; fixed. NOT done: running on real photos (none on this Mac, no API key) and the character image itself (needs the key), so `web/public/assets/character.png` does not exist yet. Real Muse Image behaviour (does it move the right object? does it leave the rest alone?) is unknown until a real run.
+- AI tools used (and for what): Claude Code, to read the Meta docs and write the code and tests.
+- Next: MODEL_API_KEY, then run `make_character.py`, look at the result, and try `/render` on a real photo. Then A6.
+
+---
+
+## 2026-11-01 - Aluinn (A4)
+- What I did: `POST /transcribe` (`transcribe.py`): accepts browser audio, converts any 16-bit PCM WAV to mono 16 kHz in Python (Meta accepts only WAV), calls `POST https://api.meta.ai/v1/asr/transcribe` with `muse-voice-transcribe-1.0`. `POST /layout` (`layout.py`, `labelling/layout.py`): Muse Spark proposes x/z (+ optional quarter turn) for movable objects; code rejects non-movable ids, objects outside the room, and overlaps with any non-passable object; one retry with the problems as feedback, else 422; returns a schema-valid world.json, a reason per change and a spawn-to-goal walkability flag. Wrote `docs/architecture.md`.
+- What worked / what didn't: offline tests pass (`test_layout_synthetic.py`: 3 goals + 8 rejection cases; `test_transcribe_synthetic.py`: audio conversion and the exact Meta request format). The "model" in the layout test is a scripted stand-in I wrote, so it tests our checks, not Muse Spark's judgement. NOT tested: real Muse Spark/Voice calls (no API key). Found and fixed a bug in my own `shared/example_world.json`: the bookshelf's `rotation_y` of 1.5708 turned it sideways through the east wall; now 0. Browsers do not record WAV, and there is no ffmpeg on this Mac, so webm/ogg/mp4 audio gets a 415 until Zac encodes WAV in the browser or the server host has ffmpeg.
+- AI tools used (and for what): Claude Code, to read the Meta docs and write the code and tests.
+- Next: MODEL_API_KEY + a real scan to run A1 -> A2 -> A3 -> A4 end to end. Then A5.
+
+---
+
+## 2026-11-01 - Aluinn (A3)
+- What I did: `labelling/roles.py` asks Muse Spark (`muse-spark-1.3`, Responses API, `input_image` parts, `text.format` json_schema) for a role + confidence per object, shown the 8 views with the A2 boxes drawn on and tagged with ids. `labelling/world.py` builds world.json (room bounds and floor_y from the mesh, spawn and goal on free floor, farthest walkable cell from spawn) and validates it against `shared/world.schema.json`. Endpoints: `POST /scan/{scan_id}/world`, `GET /world/{scan_id}`. Script: `scripts/make_world.py`.
+- What worked / what didn't: offline test passes (fake Muse Spark with an invalid role, a missing object and confidence 1.4: fallbacks and clamping work, output validates, spawn/goal are on free floor and 3m+ apart, GET works, path traversal rejected). NOT tested: the real Muse Spark call (no API key). `shared/real_world_01.json` NOT created: no real scan has been labelled yet; fabricating one would mislead Zac.
+- AI tools used (and for what): Claude Code, to read the Meta docs and write the code.
+- Next: add MODEL_API_KEY, run upload -> label -> world on a real scan, save with `--out ../shared/real_world_01.json`, commit. Then A4.
+
+---
+
 ## 2026-11-01 - Zac (Z2)
 - What I did: the Results screen now shows the room in 3D with three.js. Floor and faint wall outline from `room.bounds`; each object is a box coloured by role (passable is see-through) with a text label; Start and Goal markers; a colour legend. OrbitControls: one finger rotates, pinch zooms, two fingers pan, mouse works too. Camera fits the whole room and re-fits on rotation until you move it yourself. Files: `viewer.ts` (renderer, camera, controls, loop, clean-up), `roomScene.ts` (World -> 3D objects, no camera/screens so Z3 can reuse it), `labelSprite.ts`, `roles.ts`, `legend.ts`, `dispose.ts`. Empty hook `loadScanMesh()` plus an empty `scan-mesh-layer` for the .glb scan later. `test_world.json` (in `web/src`, dev only): the example with the sofa moved and a plant added; "Use test room (dev only)" button loads it with no code changes.
 - What worked / what didn't: `npx tsc --noEmit` and `npm run build` pass. Checked in headless Chrome: example room (6 boxes) and test room (7) both draw; 5 trips Results <-> Upload leave exactly 1 canvas, 0 on Upload; no page scroll; canvas resizes when rotated. Bugs found and fixed on the way: first dev click failed while Vite re-prepared three (now pre-bundled); camera cropped the room on tall phone screens; Goal hid behind the bookshelf; sideways phone left the 3D view tiny. NOT tested: a real iPhone's touch gestures (headless Chrome has no touch), to do by hand. Assumption to confirm with Aluinn: `rotation_y` positive = anticlockwise seen from above (three.js default).

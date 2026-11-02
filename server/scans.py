@@ -1,10 +1,11 @@
+import os
 import uuid
 from pathlib import Path
 
 import trimesh
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
-SCANS_DIR = Path(__file__).parent / "scans"
+SCANS_DIR = Path(os.environ.get("SCANS_DIR") or Path(__file__).parent / "scans")  # set SCANS_DIR to use a mounted disk
 ALLOWED_EXTENSIONS = {".glb", ".obj"}
 MAX_UPLOAD_BYTES = 100 * 1024 * 1024
 TARGET_TRIANGLES = 50_000
