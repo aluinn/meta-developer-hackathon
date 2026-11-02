@@ -1305,3 +1305,105 @@ body[data-mode='work'] { --bg: #eef3f3; --border: #c9d6d6; --accent: #0e7c86; --
 .screen-loading { background: #141518; }
 .screen-loading .spinner { border-top-color: #f5a524; }
 .landing-foot { text-align: left; padding-left: 1.75rem; }
+
+/* =====================================================================
+   Studio colour pass: bright, friendly, chunky. Game = vivid blue + yellow, Work = warm orange + deep plum.
+   (Later rules override the earlier colour passes above.)
+   ===================================================================== */
+
+.landing {
+  font-family: ui-rounded, 'SF Pro Rounded', 'Avenir Next Rounded', 'Avenir Next', system-ui, sans-serif;
+  background: #2457ff;
+}
+
+.half-game { background: #2457ff; color: #fff; }
+.half-game::before { background: radial-gradient(circle at 12% 95%, rgba(255, 255, 255, 0.18), transparent 55%); }
+.half-game .half-bg { background-image: url('/img/game-bg.jpg'); opacity: 0.3; }
+.half-work { background: #ff7f4d; color: #2a1330; }
+.half-work::before {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.22) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.22) 1px, transparent 1px);
+}
+.half-work .half-bg { background-image: url('/img/work-bg.jpg'); opacity: 0.22; mix-blend-mode: multiply; }
+
+.half-eyebrow { font-weight: 800; }
+.half-game .half-eyebrow { color: #ffd23f; }
+.half-work .half-eyebrow { color: #2a1330; }
+
+.half-title { font-weight: 900; letter-spacing: -0.02em; }
+.half-game .half-title { font-style: normal; text-transform: none; text-shadow: none; }
+.half-text { color: inherit; opacity: 0.92; }
+.half-work .half-text { color: #2a1330; }
+
+/* Chunky buttons that press down. */
+.landing-btn { border-radius: 1rem; font-style: normal; text-transform: none; letter-spacing: 0; font-weight: 800; font-size: 1.05rem; transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.15s ease; }
+.half-game .landing-btn-primary { background: #ffd23f; color: #1b2150; box-shadow: 0 5px 0 #c49a00; border-radius: 1rem; }
+.half-game .landing-btn-primary:hover { background: #ffdc66; }
+.half-work .landing-btn-primary { background: #2a1330; color: #fff; box-shadow: 0 5px 0 #0f0612; border-radius: 1rem; }
+.half-work .landing-btn-primary:hover { background: #3d1d47; }
+.landing-btn-primary:active { transform: translateY(4px); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35) !important; }
+
+.half-chips li { border: 0; border-radius: 999px; font-weight: 700; }
+.half-game .half-chips li { background: rgba(255, 255, 255, 0.2); color: #fff; }
+.half-work .half-chips li { background: rgba(42, 19, 48, 0.12); color: #2a1330; }
+
+.half-game .rows div { border-color: rgba(255, 255, 255, 0.3); }
+.half-game .rows dt { color: #ffd23f; }
+.half-game .rows dd { color: rgba(255, 255, 255, 0.9); }
+
+.case { border: 0; border-radius: 1rem; background: rgba(255, 255, 255, 0.42); color: #2a1330; }
+.case span span { color: #4a2b52; }
+.case-icon { color: #2a1330; }
+
+/* The divider: a clean white line. */
+.seam { width: 4px; border-radius: 2px; background: #fff; box-shadow: none; }
+@media (min-width: 860px) { .seam { top: 0; bottom: 0; background: #fff; } }
+@media (max-width: 859px) { .seam { height: 4px; } }
+
+.landing-brand h1 { font-weight: 900; letter-spacing: 0.3em; color: #fff; }
+.landing-brand p { color: rgba(255, 255, 255, 0.85); }
+.landing-foot { color: rgba(255, 255, 255, 0.75); }
+.landing-link { font-weight: 700; }
+
+/* Results and loading follow the same two colour families. */
+body[data-mode='game'] { --bg: #14297a; --panel: #1c37a0; --text: #ffffff; --muted: #c5d0ff; --accent: #ffd23f; --accent-text: #1b2150; --border: #4b66e0; }
+body[data-mode='work'] { --bg: #fff0e5; --panel: #ffffff; --text: #2a1330; --muted: #75505f; --accent: #e8571f; --accent-text: #ffffff; --border: #f2c9b0; }
+.screen-results[data-mode='game'] .tabbar { border-color: var(--border); }
+.screen-results[data-mode='game'] .tab[aria-selected='true'] { background: #ffd23f; color: #1b2150; }
+.screen-results[data-mode='work'] .results-header h1 { color: var(--text); }
+body[data-mode='game'] .screen-loading { background: #2457ff; }
+body[data-mode='game'] .screen-loading .spinner { border-top-color: #ffd23f; }
+body[data-mode='work'] .screen-loading { background: #ff7f4d; color: #2a1330; }
+body[data-mode='work'] .screen-loading .lead { color: #2a1330; }
+body[data-mode='work'] .screen-loading .spinner { border-color: rgba(42, 19, 48, 0.2); border-top-color: #2a1330; }
+
+/* ---- Smooth moves between screens ---- */
+
+.screen.leaving {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  overflow: hidden;
+  animation: screen-out 0.45s ease forwards;
+}
+
+.screen.entering { animation: screen-in 0.55s ease both; }
+
+@keyframes screen-out { to { opacity: 0; transform: scale(1.02); } }
+@keyframes screen-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+/* The half you picked grows to fill the screen; the other one slides away. */
+.landing[data-chosen] .half { transition: flex-grow 0.5s ease, opacity 0.4s ease; }
+.landing[data-chosen='game'] .half-game, .landing[data-chosen='work'] .half-work { flex-grow: 8; }
+.landing[data-chosen='game'] .half-work, .landing[data-chosen='work'] .half-game { flex-grow: 0.001; opacity: 0; }
+.landing[data-chosen] .seam, .landing[data-chosen] .landing-brand, .landing[data-chosen] .landing-foot { opacity: 0; transition: opacity 0.3s ease; }
+
+/* Play mode and the model view fade in rather than pop. */
+.view-area > canvas { animation: canvas-in 0.5s ease both; }
+.screen-results.playing .view-area { animation: canvas-in 0.5s ease both; }
+@keyframes canvas-in { from { opacity: 0; } to { opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .screen.leaving, .screen.entering, .view-area > canvas, .screen-results.playing .view-area { animation: none; }
+}
+.half-work .half-bg { opacity: 0.15; }

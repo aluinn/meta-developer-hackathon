@@ -72,7 +72,10 @@ function buildUpload(h: ScreenHandlers) {
   input.addEventListener('change', () => {
     const file = input.files?.[0]
     input.value = '' // so choosing the same file again still counts
-    if (file) h.onFileChosen(file, pendingMode)
+    if (file) {
+      section.dataset.chosen = pendingMode // the chosen half grows to fill the screen while the next one fades in
+      h.onFileChosen(file, pendingMode)
+    }
   })
 
   const button = (label: string, kind: 'primary' | 'ghost', onClick: () => void) => {
@@ -98,7 +101,10 @@ function buildUpload(h: ScreenHandlers) {
     const actions = el('div', 'half-actions')
     const link = el('button', 'landing-link', secondary)
     link.type = 'button'
-    link.addEventListener('click', () => h.onUseExample(mode))
+    link.addEventListener('click', () => {
+      section.dataset.chosen = mode
+      h.onUseExample(mode)
+    })
     actions.append(button(primary, 'primary', choose(mode)), link)
     inner.append(tag, heading, blurb, chipRow, actions)
     if (mode === 'work') {
@@ -272,8 +278,38 @@ export function createScreens(root: HTMLElement, handlers: ScreenHandlers): Scre
   }
   root.replaceChildren(upload.section, loading.section, results.section)
 
+  // Moving between screens: the old one fades out on top while the new one fades in underneath (no hard cut).
+  // The new screen is laid out straight away, so the 3D viewer still gets a real size.
+  const LEAVE_MS = 450
+  const leaveTimers = new Map<HTMLElement, number>()
+  let current: ScreenName | null = null
   const show = (name: ScreenName) => {
-    for (const [n, s] of Object.entries(byName)) s.section.hidden = n !== name
+    const next = byName[name].section
+    const prev = current ? byName[current].section : null
+    current = name
+    if (name === 'upload') delete upload.section.dataset.chosen
+    const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    for (const s of Object.values(byName)) {
+      if (s.section === next || s.section === prev) continue
+      window.clearTimeout(leaveTimers.get(s.section))
+      s.section.classList.remove('leaving')
+      s.section.hidden = true
+    }
+    window.clearTimeout(leaveTimers.get(next))
+    next.classList.remove('leaving')
+    next.hidden = false
+    if (prev && prev !== next && !calm) {
+      prev.classList.add('leaving')
+      leaveTimers.set(prev, window.setTimeout(() => {
+        prev.hidden = true
+        prev.classList.remove('leaving')
+      }, LEAVE_MS))
+      next.classList.remove('entering')
+      void next.offsetWidth // restart the fade-in
+      next.classList.add('entering')
+    } else if (prev && prev !== next) {
+      prev.hidden = true
+    }
     byName[name].focus.focus({ preventScroll: true })
     window.scrollTo(0, 0)
   }
@@ -286,6 +322,7 @@ export function createScreens(root: HTMLElement, handlers: ScreenHandlers): Scre
       upload.fileInfo.textContent = `${file.name} (${formatSize(file.size)}). Not uploaded yet.`
     },
     showError: (message) => {
+      delete upload.section.dataset.chosen
       upload.error.textContent = message
     },
     setStatus: (message) => {
