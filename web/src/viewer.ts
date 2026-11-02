@@ -1,10 +1,9 @@
-// The 3D viewer: renderer, camera, mouse/touch controls and the render loop.
-// It knows nothing about screens or buttons, so play mode (Z3) can reuse it.
+// The normal 3D view: the stage (stage.ts) plus OrbitControls so you can look around.
+// It knows nothing about screens or buttons.
 
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import { disposeChildren } from './dispose.ts'
-import { buildRoom } from './roomScene.ts'
+import { createStage } from './stage.ts'
 import type { World } from './world.ts'
 
 export interface Viewer {
@@ -17,35 +16,14 @@ export interface Viewer {
 }
 
 export function createViewer(container: HTMLElement, initialWorld: World): Viewer {
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)) // 3x phone screens: 2x is plenty
-  renderer.domElement.className = 'view-canvas'
-  container.prepend(renderer.domElement)
-
-  const scene = new THREE.Scene()
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x667085, 1.6))
-  const sun = new THREE.DirectionalLight(0xffffff, 1.4)
-  sun.position.set(3, 8, 5)
-  scene.add(sun)
-
-  // Layers, bottom to top. The scan mesh layer is empty until the hook below is built.
-  const scanLayer = new THREE.Group()
-  scanLayer.name = 'scan-mesh-layer'
-  const roomLayer = new THREE.Group()
-  roomLayer.name = 'room-layer'
-  scene.add(scanLayer, roomLayer)
-
-  const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 200)
-  const controls = new OrbitControls(camera, renderer.domElement)
+  const stage = createStage(container)
+  const camera = stage.camera
+  const controls = new OrbitControls(camera, stage.canvas)
   controls.enableDamping = true
   controls.screenSpacePanning = true
   controls.maxPolarAngle = Math.PI * 0.495 // can't go under the floor
   // One finger rotates; two fingers pinch to zoom and drag to pan. Mouse: left rotate, wheel zoom, right pan.
   controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }
-
-  // Stop Safari treating a two-finger pinch on the view as a page zoom.
-  const blockGesture = (e: Event) => e.preventDefault()
-  container.addEventListener('gesturestart', blockGesture)
 
   // If you haven't moved the camera yourself, re-fit the room when the screen shape changes
   // (e.g. rotating the phone). Once you've started orbiting, we leave your view alone.
@@ -54,16 +32,9 @@ export function createViewer(container: HTMLElement, initialWorld: World): Viewe
   controls.addEventListener('start', () => {
     userMovedCamera = true
   })
-
-  function resize(): void {
-    const width = container.clientWidth
-    const height = container.clientHeight
-    if (width === 0 || height === 0) return
-    renderer.setSize(width, height, false) // false: our CSS sets the canvas size
-    camera.aspect = width / height
-    camera.updateProjectionMatrix()
+  stage.onResize(() => {
     if (!userMovedCamera) frameRoom(currentWorld)
-  }
+  })
 
   /** Point the camera at the whole room from a raised corner, pulled back until every corner is on screen. */
   function frameRoom(world: World): void {
@@ -104,37 +75,21 @@ export function createViewer(container: HTMLElement, initialWorld: World): Viewe
   function setWorld(world: World): void {
     currentWorld = world
     userMovedCamera = false
-    disposeChildren(roomLayer)
-    roomLayer.add(buildRoom(world))
+    stage.setRoom(world)
     frameRoom(world)
   }
 
-  // Resize whenever the container changes size: window resize, phone rotation, etc.
-  const resizeObserver = new ResizeObserver(resize)
-  resizeObserver.observe(container)
-  resize()
   setWorld(initialWorld)
-
-  renderer.setAnimationLoop(() => {
-    controls.update() // needed for the smooth "glide" after you let go
-    renderer.render(scene, camera)
-  })
+  stage.setLoop(() => controls.update()) // update() gives the smooth "glide" after you let go
 
   return {
     setWorld,
     loadScanMesh: async (_url: string): Promise<void> => {
-      // TODO (later task): load a .glb with GLTFLoader and add it to `scanLayer`.
+      // TODO (later task): load a .glb with GLTFLoader and add it to `stage.scanLayer`.
     },
     dispose: () => {
-      renderer.setAnimationLoop(null)
-      resizeObserver.disconnect()
-      container.removeEventListener('gesturestart', blockGesture)
       controls.dispose()
-      disposeChildren(roomLayer)
-      disposeChildren(scanLayer)
-      renderer.dispose()
-      renderer.forceContextLoss()
-      renderer.domElement.remove()
+      stage.dispose()
     },
   }
 }

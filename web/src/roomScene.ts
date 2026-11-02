@@ -11,6 +11,11 @@ import type { Vec3, World, WorldObject } from './world.ts'
 
 const OUTLINE_COLOR = 0x1b1f2a
 
+/** Names used to find parts of the room later (play mode hides some of them). */
+export const OBJECT_LABEL = 'object-label'
+export const SPAWN_MARKER = 'spawn-marker'
+export const GOAL_MARKER = 'goal-marker'
+
 function buildFloor(world: World): THREE.Mesh {
   const { min, max } = world.room.bounds
   const geometry = new THREE.PlaneGeometry(max[0] - min[0], max[2] - min[2])
@@ -70,6 +75,7 @@ function buildObject(obj: WorldObject): THREE.Group {
 
   // The label sits just above the top of the box (and is not rotated with it).
   const label = createLabelSprite(obj.label)
+  label.name = OBJECT_LABEL
   label.position.set(obj.position[0], obj.position[1] + h / 2 + 0.2, obj.position[2])
 
   group.add(body, label)
@@ -77,9 +83,9 @@ function buildObject(obj: WorldObject): THREE.Group {
 }
 
 /** A pole with a ball (start) or a cone (goal) standing on a flat disc, plus a text label. */
-function buildMarker(at: Vec3, look: Look, shape: 'ball' | 'cone'): THREE.Group {
+function buildMarker(at: Vec3, look: Look, shape: 'ball' | 'cone', name: string): THREE.Group {
   const group = new THREE.Group()
-  group.name = look.name.toLowerCase()
+  group.name = name
   // Always drawn on top, so furniture can never hide where to start or where to go.
   const material = new THREE.MeshStandardMaterial({ color: look.color, depthTest: false, depthWrite: false })
 
@@ -108,6 +114,9 @@ export function buildRoom(world: World): THREE.Group {
   room.name = 'room'
   room.add(buildFloor(world), buildWallOutline(world))
   for (const obj of world.objects) room.add(buildObject(obj))
-  room.add(buildMarker(world.spawn, SPAWN_LOOK, 'ball'), buildMarker(world.goal, GOAL_LOOK, 'cone'))
+  room.add(
+    buildMarker(world.spawn, SPAWN_LOOK, 'ball', SPAWN_MARKER),
+    buildMarker(world.goal, GOAL_LOOK, 'cone', GOAL_MARKER),
+  )
   return room
 }
