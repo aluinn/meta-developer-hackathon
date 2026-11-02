@@ -27,6 +27,8 @@ RUN useradd --create-home app && chown -R app /app
 USER app
 WORKDIR /app/server
 ENV PYTHONUNBUFFERED=1
+# glibc keeps a separate memory pool per thread by default, which wastes memory on a 512 MB host; 2 is enough.
+ENV MALLOC_ARENA_MAX=2
 
 # Secrets (MODEL_API_KEY) are set in the host's settings, never baked into the image.
 # ALLOWED_ORIGINS is only needed if the web app is hosted somewhere else (not in this all-in-one setup).

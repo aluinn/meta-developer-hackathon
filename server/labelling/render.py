@@ -107,6 +107,16 @@ def make_cameras(mesh: trimesh.Trimesh, count: int = NUM_VIEWS) -> list[Camera]:
 GREY = 170
 
 
+def own_vertex_colors(mesh: trimesh.Trimesh) -> tuple[np.ndarray, str] | None:
+    """The mesh's own colours, if it has any (a scan that was not simplified keeps its texture). None if it is plain."""
+    visual = mesh.visual
+    if visual.kind == "vertex":
+        return np.asarray(visual.vertex_colors)[:, :3].astype(np.uint8), "vertex_colors"
+    if visual.kind == "texture":
+        return np.asarray(visual.to_color().vertex_colors)[:, :3].astype(np.uint8), "texture"
+    return None
+
+
 def vertex_colors_from_original(simplified: trimesh.Trimesh, original: trimesh.Trimesh) -> tuple[np.ndarray, str]:
     """Simplification drops colour, so copy it from the nearest original vertex.
 

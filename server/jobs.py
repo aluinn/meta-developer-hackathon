@@ -6,35 +6,28 @@
 Why: the free host is slow (labelling took about 100 s there), and hosting layers often cut a request off at about 100 s. The website now starts the job and
 checks the status every couple of seconds. Only one job runs at a time (the 512 MB host cannot take two), and the rest wait in line.
 Jobs live in memory: if the server restarts, the status endpoint answers 404 and the website tells the person to try again.
+The work itself runs in a separate process per job (labelling/worker.py) so its memory is returned to the operating system when it ends.
 """
 import asyncio
+import json
 import logging
 import re
+import sys
 import time
 from dataclasses import dataclass, field
 
 from fastapi import APIRouter, HTTPException
-from openai import OpenAIError
 from pydantic import BaseModel, Field
 
 from labels import clean_prompts
-from labelling.pipeline import label_scan
-from labelling.roles import MuseSparkClient
-from labelling.sam import MissingApiKey, SamClient
 from labelling.types import PROMPTS
-from labelling.world import build_world
-from scans import SCANS_DIR
+from scans import SCANS_DIR, SERVER_DIR
 
 log = logging.getLogger("jobs")
 router = APIRouter()
 
 
-def make_segmenter():
-    return SamClient()
-
-
-def make_assigner():
-    return MuseSparkClient()
+JOB_TIMEOUT_S = 10 * 60
 
 
 @dataclass
@@ -43,7 +36,7 @@ class Job:
     step: str = "queued"  # queued | rendering | labelling | roles | done
     done: int = 0
     total: int = 0
-    error_kind: str | None = None  # no_key | no_objects | ai_service | failed
+    error_kind: str | None = None  # no_key | no_objects | ai_service | out_of_memory | failed
     error: str | None = None
     started: float = field(default_factory=time.time)
     task: asyncio.Task | None = field(default=None, repr=False)
@@ -76,31 +69,42 @@ def _scan_dir(scan_id: str):
 
 
 async def _run(scan_id: str, job: Job, prompts: list[str]) -> None:
+    """Run the labelling and roles in a separate process (labelling/worker.py) and follow the progress lines it prints."""
     scan_dir = SCANS_DIR / scan_id
     async with _one_at_a_time():
-        job.state = "running"
-        job.step = "rendering"
-
-        def on_step(step: str, done: int, total: int) -> None:
-            job.step, job.done, job.total = step, done, total
-
+        job.state, job.step = "running", "rendering"
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, "-m", "labelling.worker", "process", str(scan_dir), json.dumps(prompts),
+            stdout=asyncio.subprocess.PIPE, cwd=SERVER_DIR,  # stderr is inherited, so its logs reach the host's log
+        )
+        final: dict | None = None
         try:
-            sam, assigner = make_segmenter(), make_assigner()
-            await label_scan(scan_dir, sam, labeller_name="sam-3.1", prompts=prompts, on_step=on_step)
-            job.step, job.done, job.total = "roles", 0, 1
-            await build_world(scan_dir, assigner)
+            async with asyncio.timeout(JOB_TIMEOUT_S):
+                assert proc.stdout is not None
+                async for raw in proc.stdout:
+                    try:
+                        event = json.loads(raw)
+                    except ValueError:
+                        continue  # not one of ours
+                    if event.get("event") == "step":
+                        job.step, job.done, job.total = event["step"], event["done"], event["total"]
+                    elif event.get("event") in ("done", "error"):
+                        final = event
+                await proc.wait()
+        except TimeoutError:
+            proc.kill()
+            await proc.wait()
+            job.state, job.error_kind, job.error = "error", "failed", "Took too long."
+            return
+        if final and final["event"] == "done":
             job.step, job.done, job.total, job.state = "done", 1, 1, "done"
-        except MissingApiKey as exc:
-            job.state, job.error_kind, job.error = "error", "no_key", str(exc)
-        except ValueError as exc:
-            kind = "no_objects" if "no objects" in str(exc).lower() else "failed"
-            job.state, job.error_kind, job.error = "error", kind, str(exc)
-        except OpenAIError as exc:  # the Meta API said no (rate limit, outage, bad request)
-            log.exception("AI service error while processing %s", scan_id)
-            job.state, job.error_kind, job.error = "error", "ai_service", f"{type(exc).__name__}"
-        except Exception as exc:  # anything else: log it for us, give the person a short message
-            log.exception("processing %s failed", scan_id)
-            job.state, job.error_kind, job.error = "error", "failed", f"{type(exc).__name__}"
+        elif final:
+            job.state, job.error_kind, job.error = "error", final.get("kind", "failed"), final.get("message")
+        else:
+            # No final line: the process died. SIGKILL (-9) is how the host stops a process that uses too much memory.
+            log.error("worker for %s died with exit code %s", scan_id, proc.returncode)
+            job.state, job.error_kind = "error", "out_of_memory" if proc.returncode == -9 else "failed"
+            job.error = "The worker process was stopped (probably out of memory)." if proc.returncode == -9 else "The worker process crashed."
 
 
 @router.post("/scan/{scan_id}/process", status_code=202)

@@ -11,7 +11,7 @@ from openai import OpenAIError
 from PIL import Image
 
 from .meshio import load_mesh
-from .render import Camera, View, make_cameras, render_view, vertex_colors_from_original
+from .render import Camera, View, make_cameras, own_vertex_colors, render_view, vertex_colors_from_original
 from .types import PROMPTS, Detection, Segmenter
 from .vote import group_objects, vote_faces
 
@@ -24,6 +24,9 @@ def _png(rgb: np.ndarray) -> bytes:
 
 def load_mesh_and_colours(scan_dir: Path) -> tuple[trimesh.Trimesh, np.ndarray, str]:
     mesh = trimesh.load(scan_dir / "simplified.glb", force="mesh")
+    own = own_vertex_colors(mesh)  # a scan that did not need simplifying keeps its colours: no need to load the original again (saves ~60 MB)
+    if own is not None:
+        return mesh, own[0], own[1]
     original_path = next(scan_dir.glob("original.*"), None)
     colors, colour_source = np.full((len(mesh.vertices), 3), 170, dtype=np.uint8), "none"
     if original_path is not None:

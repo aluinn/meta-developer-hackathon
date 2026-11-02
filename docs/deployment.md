@@ -68,5 +68,5 @@ docker run --rm -p 8000:8000 -e MODEL_API_KEY=your-key -e ALLOWED_ORIGINS=http:/
   Keep the URL out of the public README, deploy close to demo time, and watch your credit balance. If that worries you, ask for a simple access token to be added.
 - **The free plan has 512MB of memory.** This already bit us: the bathroom scan has an 8192 x 2560 texture, and loading it took 574 MB, so the server was killed and the site showed
   a "502". Fixed by shrinking textures on load (`server/labelling/meshio.py`); the whole upload, label and world run now peaks at about 380 MB. That is under the limit but not by a lot,
-  so a bigger or more complicated scan could still fail. A 502 with no message from our server means "killed or restarting", and the website says so. Uploads are capped at 100 MB, and a
+  so a bigger or more complicated scan could still fail. The first fix was not enough: the **second** scan on a running server killed it, because Python keeps freed memory. Each job now runs in its own worker process, which returns its memory when it exits (`docs/architecture.md`). A 502 with no message from our server means "killed or restarting", and the website says so. Uploads are capped at 100 MB, and a
   texture so big that merely decoding it needs more than 512 MB (something like 16k x 16k) would still crash the server before the shrink runs.

@@ -108,6 +108,8 @@ function jobError(kind: string | null): ApiError {
       return new ApiError("We couldn't find any furniture we recognise in this scan. A clearer scan of a smaller room works best.")
     case 'ai_service':
       return new ApiError('The AI service had a problem. Please try again in a moment.')
+    case 'out_of_memory':
+      return new ApiError('That scan is too big for the free server to process. Try a smaller or simpler scan.')
     default:
       return new ApiError('Something went wrong while processing your scan. Please try again.')
   }

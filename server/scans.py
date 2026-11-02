@@ -1,17 +1,18 @@
+import json
 import os
+import subprocess
+import sys
 import uuid
 from pathlib import Path
 
-import trimesh
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
-from labelling.meshio import load_mesh
-
-SCANS_DIR = Path(os.environ.get("SCANS_DIR") or Path(__file__).parent / "scans")  # set SCANS_DIR to use a mounted disk
+SERVER_DIR = Path(__file__).resolve().parent
+SCANS_DIR = Path(os.environ.get("SCANS_DIR") or SERVER_DIR / "scans")  # set SCANS_DIR to use a mounted disk
 ALLOWED_EXTENSIONS = {".glb", ".obj"}
 MAX_UPLOAD_BYTES = 100 * 1024 * 1024
-TARGET_TRIANGLES = 50_000
 CHUNK_BYTES = 1024 * 1024
+PREPARE_TIMEOUT_S = 300
 
 router = APIRouter()
 
@@ -26,24 +27,37 @@ def upload_scan(file: UploadFile = File(...)) -> dict[str, str | int]:
     scan_id = uuid.uuid4().hex
     scan_dir = SCANS_DIR / scan_id
     scan_dir.mkdir(parents=True)
-    original_path = scan_dir / f"original{ext}"
 
     try:
-        _save_limited(file, original_path)
-        mesh = _load_mesh(original_path)
-        triangles_before = len(mesh.faces)
-        if triangles_before > TARGET_TRIANGLES:
-            mesh = mesh.simplify_quadric_decimation(face_count=TARGET_TRIANGLES)
-        mesh.export(scan_dir / "simplified.glb")
+        _save_limited(file, scan_dir / f"original{ext}")
+        result = _prepare(scan_dir)
     except Exception:
         _remove_dir(scan_dir)
         raise
 
-    return {
-        "scan_id": scan_id,
-        "triangles_before": triangles_before,
-        "triangles_after": len(mesh.faces),
-    }
+    return {"scan_id": scan_id, "triangles_before": result["triangles_before"], "triangles_after": result["triangles_after"]}
+
+
+def _prepare(scan_dir: Path) -> dict:
+    """Load and simplify the mesh in a separate process (see labelling/worker.py): a scan with a big texture needs a lot of memory
+    while it loads, and a separate process gives all of it back when it exits instead of leaving the web server fat."""
+    try:
+        run = subprocess.run([sys.executable, "-m", "labelling.worker", "prepare", str(scan_dir)], cwd=SERVER_DIR,
+                             capture_output=True, text=True, timeout=PREPARE_TIMEOUT_S)
+    except subprocess.TimeoutExpired as exc:
+        raise HTTPException(422, "Processing that scan took too long. Try a smaller or simpler scan.") from exc
+    events = []
+    for line in run.stdout.splitlines():
+        try:
+            events.append(json.loads(line))
+        except ValueError:
+            pass  # not one of ours
+    event = events[-1] if events else None
+    if event and event.get("event") == "prepared":
+        return event
+    if event and event.get("event") == "error":
+        raise HTTPException(422, event.get("message", "Could not read that scan."))
+    raise HTTPException(422, "The server could not process that scan; it may be too large or complex. Try a smaller or simpler scan.")
 
 
 def _save_limited(file: UploadFile, dest: Path) -> None:
@@ -55,16 +69,6 @@ def _save_limited(file: UploadFile, dest: Path) -> None:
             if written > MAX_UPLOAD_BYTES:
                 raise HTTPException(413, "File is larger than 100MB.")
             out.write(chunk)
-
-
-def _load_mesh(path: Path) -> trimesh.Trimesh:
-    try:
-        mesh = load_mesh(path)
-    except Exception as exc:
-        raise HTTPException(422, f"Could not read the mesh: {exc}") from exc
-    if not isinstance(mesh, trimesh.Trimesh) or len(mesh.faces) == 0:
-        raise HTTPException(422, "The file contains no triangles.")
-    return mesh
 
 
 def _remove_dir(path: Path) -> None:
