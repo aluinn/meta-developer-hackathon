@@ -26,7 +26,7 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, te
   return node
 }
 
-const ITEM_SYMBOL: Record<ItemKind, string> = { boost: 'BOOST', spring: 'SPRING', wings: 'WINGS', shield: 'SHIELD', freeze: 'FREEZE' }
+const ITEM_SYMBOL: Record<ItemKind, string> = { boost: 'BOOST', spring: 'SPRING', wings: 'WINGS', shield: 'SHIELD', freeze: 'FREEZE', heart: 'LIFE' }
 
 /**
  * `hud` is the play screen's overlay. `timer` is the existing timer element (it now shows the time LEFT).
@@ -35,6 +35,8 @@ const ITEM_SYMBOL: Record<ItemKind, string> = { boost: 'BOOST', spring: 'SPRING'
 export function createRaceHud(hud: HTMLElement, timer: HTMLElement, onUse: () => void): RaceHud {
   const info = el('div', 'race-info')
   const effects = el('div', 'race-effects')
+  const lives = el('div', 'race-lives')
+  lives.setAttribute('aria-label', 'Lives')
   const banner = el('div', 'race-banner')
   banner.setAttribute('role', 'status')
   const countdown = el('div', 'race-countdown')
@@ -49,7 +51,7 @@ export function createRaceHud(hud: HTMLElement, timer: HTMLElement, onUse: () =>
   const end = el('div', 'race-end')
   end.hidden = true
   end.setAttribute('role', 'dialog')
-  hud.append(info, effects, banner, countdown, item, end)
+  hud.append(info, effects, lives, banner, countdown, item, end)
 
   let bannerTimer = 0
   let lastCount = ''
@@ -61,6 +63,13 @@ export function createRaceHud(hud: HTMLElement, timer: HTMLElement, onUse: () =>
       const gates = game.course.checkpoints.length
       info.textContent = game.flagUnlocked ? `Catch the flag!  ${game.tags}/${TUNING.tagsNeeded}` : `Gate ${Math.min(game.cpIndex + 1, gates)} of ${gates}`
       info.classList.toggle('flag', game.flagUnlocked)
+      const hearts = '\u2665'.repeat(game.lives) + '\u2661'.repeat(Math.max(0, TUNING.lives - game.lives))
+      if (lives.textContent !== hearts) {
+        lives.textContent = hearts
+        lives.classList.remove('hurt')
+        void lives.offsetWidth
+        lives.classList.add('hurt') // a little shake whenever the count changes
+      }
 
       const text = game.phase === 'countdown' ? (game.countdown > 0 ? String(Math.ceil(game.countdown)) : 'GO!') : ''
       if (text !== lastCount) {
@@ -83,7 +92,7 @@ export function createRaceHud(hud: HTMLElement, timer: HTMLElement, onUse: () =>
       item.dataset.item = game.held ?? ''
       item.disabled = game.phase !== 'running'
 
-      const active = (Object.keys(game.effects) as ItemKind[]).filter((k) => game.effects[k] > 0)
+      const active = (Object.keys(game.effects) as ItemKind[]).filter((k) => game.effects[k] > 0 && k !== 'heart')
       const key = active.map((k) => `${k}${Math.ceil(game.effects[k])}`).join('|')
       if (effects.dataset.key !== key) {
         effects.dataset.key = key
@@ -114,7 +123,7 @@ export function createRaceHud(hud: HTMLElement, timer: HTMLElement, onUse: () =>
     },
     dispose() {
       window.clearTimeout(bannerTimer)
-      for (const node of [info, effects, banner, countdown, item, end]) node.remove()
+      for (const node of [info, effects, lives, banner, countdown, item, end]) node.remove()
       timer.classList.remove('urgent')
     },
   }

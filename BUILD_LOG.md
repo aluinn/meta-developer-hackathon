@@ -12,6 +12,12 @@ Add a new entry at the TOP after each work session. Copy the template.
 - Next:
 ```
 
+## 2026-11-02 - Aluinn
+- What I did: Made the race more of a parkour game. You have 3 lives; a hit from a rolling ball or a long fall costs one (a fall sends you back to the last gate). Added an Extra life item, a Shield now also breaks one fall, and Wings stop falls. More gates and item boxes sit on top of furniture. Camera: click the view and the mouse steers it (look up, down, left, right); the camera no longer swings behind you while the mouse is in charge, and you can now look up.
+- What worked / what didn't: Offline tests (rules, course, camera) pass, and a real-browser run showed hearts, a lost life from a hit and from a fall, and the end screens. Pointer lock itself can't be tested in a headless browser, so the mouse feel needs a human try.
+- AI tools used (and for what): Claude Code wrote and tested the changes.
+- Next: Try the mouse look and lives; tune `lives`, `fallLimit` and mouse speed (`MOUSE_LOOK_SPEED` in input.ts). Layout tab still to do.
+
 ---
 
 ## 2026-11-02 - Aluinn (play mode becomes a race)

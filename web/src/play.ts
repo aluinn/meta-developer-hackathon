@@ -110,7 +110,7 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
   const timer = el('div', 'hud-timer', '0.0 s')
   const fps = el('div', 'hud-fps')
   fps.hidden = !SHOW_FPS
-  const hint = el('p', 'hud-hint', 'WASD / arrows move · Space jump (hold to fly) · E use item · drag to look')
+  const hint = el('p', 'hud-hint', 'WASD / arrows move · Space jump (hold to fly) · E use item · click the view, then move the mouse to look around (Esc lets go)')
   hint.hidden = hasTouch()
   const win = el('div', 'hud-win')
   win.hidden = true
@@ -155,6 +155,8 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
   let sceneTime = 0
   let nextSeed = 1 + Math.floor(Math.random() * 1_000_000)
   let endShown = false
+  let airborne = false // were we in the air last frame?
+  let lastStandY = spawnFeet.y // the height of the last place we stood (to measure a fall from)
   const knock = { x: 0, z: 0, t: 0 } // a short shove away from a hazard that hit you
   const bestKey = `roomworld.best.${world.source_scan}`
 
@@ -210,7 +212,8 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
   }
 
   function handleEvents(events: GameEvent[]): void {
-    if (!raceHud) return
+    const game = race?.game
+    if (!raceHud || !game) return
     for (const e of events) {
       switch (e.type) {
         case 'go': raceHud.banner('GO!', 'good'); break
@@ -221,11 +224,23 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
         case 'itemFull': raceHud.banner('Your hands are full: use your item (E)', 'info'); break
         case 'use': raceHud.banner(`${ITEM_INFO[e.kind].name}!`, 'good'); break
         case 'hit':
-          raceHud.banner(e.blocked ? 'Your shield saved you!' : `Ouch! -${TUNING.hitPenalty}s`, e.blocked ? 'good' : 'bad')
+          raceHud.banner(e.blocked ? 'Your shield saved you!' : `Ouch! Lost a life: ${game.lives} left`, e.blocked ? 'good' : 'bad')
           knock.x = e.dirX
           knock.z = e.dirZ
           knock.t = KNOCKBACK_SECONDS
           break
+        case 'fall':
+          raceHud.banner(e.blocked ? 'Your shield broke your fall!' : `You fell! Lost a life: ${game.lives} left`, e.blocked ? 'good' : 'bad')
+          break
+        case 'life':
+          if (e.reason === 'heart') raceHud.banner(`Extra life! ${e.lives} lives`, 'good')
+          if (e.reason === 'fall' && game.phase === 'running') {
+            respawn() // back to the last gate
+            lastStandY = race?.game.respawnPoint()[1] ?? lastStandY
+            airborne = false
+          }
+          break
+        case 'livesFull': raceHud.banner('You already have all your lives', 'info'); break
         case 'flagTired': raceHud.banner('The flag is tired: now!', 'info'); break
         case 'tag': if (e.n < e.of) raceHud.banner(`Caught it! ${e.n} of ${e.of}  +${TUNING.tagBonus}s  It runs faster now...`, 'good'); break
         default: break
@@ -252,9 +267,10 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
         lines.push(`Best: ${best} seconds to spare`)
       }
     } else {
-      lines.push(`You passed ${game.cpIndex} of ${gates} gates and caught the flag ${game.tags} of ${TUNING.tagsNeeded} times.`)
+      lines.push(`You passed ${game.cpIndex} of ${gates} gates and caught the flag ${game.tags} of ${TUNING.tagsNeeded} times.`, `Lives left: ${game.lives}`)
     }
-    raceHud.showEnd({ title: game.phase === 'won' ? 'You caught the flag!' : "Time's up!", lines, onRestart: restartRun, onBack })
+    input.releaseMouse() // so the buttons on the end screen can be clicked
+    raceHud.showEnd({ title: game.phase === 'won' ? 'You caught the flag!' : game.lives === 0 ? 'Out of lives!' : "Time's up!", lines, onRestart: restartRun, onBack })
     endShown = true
   }
 
@@ -283,6 +299,8 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
     facing = facingStart()
     knock.t = 0
     respawn()
+    lastStandY = spawnFeet.y
+    airborne = false
   }
   restart.addEventListener('click', restartRun)
 
@@ -356,12 +374,31 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
 
     // Swing the camera behind only when running away from it (not when running towards it).
     const runningAway = speed > 0.1 ? Math.max(0, move.y) * (speed / wantedSpeed) + Math.abs(move.x) * 0.5 : 0
+    cam.setAutoSwing(!input.isMouseLooking()) // the mouse is in charge of the view while it is captured
     cam.update(dt, drawFeet, facing, runningAway, input.takeLook(), clearDistance)
 
-    // Fell out of the world?
-    if (currCentre.y - CHARACTER.height / 2 < floorY - FALL_LIMIT) respawn()
-
     const feetY = currCentre.y - CHARACTER.height / 2
+    // Fell out of the world? That costs a life in the race (and sends you back to the last gate).
+    if (feetY < floorY - FALL_LIMIT) {
+      if (race) handleEvents(race.game.fellOut())
+      else respawn()
+      if (race && race.game.phase === 'running') respawn()
+      lastStandY = feetY
+      airborne = false
+    }
+    // Parkour: a long drop from where you last stood costs a life. (Wings carry you, so flying counts as standing.)
+    if (game) {
+      if (mods.flying) {
+        lastStandY = feetY
+        airborne = false
+      } else if (motion.grounded) {
+        if (airborne) handleEvents(game.landed(lastStandY - feetY))
+        airborne = false
+        lastStandY = feetY
+      } else {
+        airborne = true
+      }
+    }
     if (game && race && raceHud) {
       // The race: tell the rules where the player is, and show what happened.
       handleEvents(game.update(dt, [currCentre.x, feetY, currCentre.z]))
@@ -406,6 +443,11 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
         physics.step()
         readCentre(prevCentre)
         readCentre(currCentre)
+      },
+      // Pretend we last stood `height` metres higher up and are now in the air (so landing counts as a fall).
+      dropFrom: (height: number) => {
+        lastStandY = currCentre.y - CHARACTER.height / 2 + height
+        airborne = true
       },
       profile: () => ({ unit: CHARACTER.height, runSpeed: MOVE.runSpeed }),
     }
