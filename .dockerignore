@@ -2,8 +2,9 @@
 .env
 .env.*
 !.env.example
-web
 docs
+web/node_modules
+web/dist
 **/node_modules
 **/.venv
 **/venv

@@ -1,7 +1,21 @@
 # Deploying the server
 
-Goal: the FastAPI server runs somewhere public so Zac's web app (and the judges) can reach it. The Meta API key lives
+Goal: one public address that serves **both** the website (Zac's web app) and the API, so the judges open one link. The Meta API key lives
 only in the host's secret settings, never in this repo.
+
+## One server for everything (how it works)
+The `Dockerfile` builds the web app (`npm run build`) and copies the result next to the Python server. FastAPI serves the website at `/`
+and the API at its own paths (`/health`, `/scan`, `/world/...`, `/docs` ...). The API routes are registered first, so they always win; the
+website only answers paths the API doesn't. Locally you can try the same thing without Docker:
+```
+cd web && npm run build
+cd ../server && uvicorn main:app --port 8000     # then open http://localhost:8000
+```
+(If `web/dist` doesn't exist the server just runs the API alone.) Because the page and the API come from the same address:
+- **No CORS needed** in production. `ALLOWED_ORIGINS` only matters while developing with `npm run dev` (page on :5173, API on :8000).
+- **Zac's code should call the API with relative paths**, e.g. `fetch('/layout', ...)`, never `http://localhost:8000/layout`. In development, add a
+  proxy in `web/vite.config.ts` (`server: { proxy: { '/scan': 'http://localhost:8000', '/world': ..., '/layout': ..., '/render': ..., '/transcribe': ..., '/score': ... } }`) so the same relative paths work on :5173.
+- **No separate Vercel deploy is needed.** Render serves the site too.
 
 ## Options
 
@@ -11,7 +25,7 @@ only in the host's secret settings, never in this repo.
 | Railway | Easy | Also connects to GitHub; usage-based billing. Sources disagree on its free credit and card requirement, so check its pricing page. |
 | Fly.io | More setup | Needs the `flyctl` command line and a `fly.toml`; good Docker control and volumes. Billing has been described as harder to predict. |
 | Google Cloud Run | Heavier | Scales to zero, but needs a Google Cloud project and billing set up. |
-| Vercel | Not a good fit | Serverless: no ffmpeg, short time limits and no persistent files, but our scan pipeline needs all three. Use Vercel for Zac's web app instead. |
+| Vercel | Not a good fit for the server | Serverless: no ffmpeg, short time limits and no persistent files, but our scan pipeline needs all three. (Not needed for the website either, since Render serves it.) |
 
 (Render's free-plan facts are from render.com/docs/free. The other hosts' details come from third-party comparisons dated 2026
 that disagree with each other. Check each pricing page before relying on them.)
@@ -32,12 +46,12 @@ when the service restarts, redeploys, or spins down after 15 idle minutes. So:
 2. In the Render dashboard: **New +, Blueprint**, connect GitHub, pick `meta-developer-hackathon` and the branch. Render reads `render.yaml`.
 3. Render asks for two values (this is what `sync: false` means; it never stores them in the repo):
    - `MODEL_API_KEY`: paste your own Meta key here. Nowhere else.
-   - `ALLOWED_ORIGINS`: the web app's address, e.g. `https://room-world.vercel.app`. Until Zac has one, use `http://localhost:5173`.
+   - `ALLOWED_ORIGINS`: only needed if the website is hosted somewhere else. With the all-in-one setup, enter `http://localhost:5173` (it just can't be left empty).
      Several are allowed, comma-separated, with no trailing slash or spaces.
 4. Click **Apply**. The first build takes a few minutes. Render shows the URL, like `https://room-world-server.onrender.com`.
 5. Check it: open `https://<your-url>/health`. You should see `{"status":"ok"}`. (First request after sleeping takes about a minute.)
-   Also try `https://<your-url>/docs`.
-6. When Zac has deployed the web app, change `ALLOWED_ORIGINS` in Render (Environment tab) and save. Render restarts the server.
+   Then open `https://<your-url>/` for the website, and `https://<your-url>/docs` for the API test page.
+6. Every push to the branch Render watches rebuilds both the site and the server. (The build is longer now: it installs and builds the web app first.)
 
 ## Changing the key or origins later
 Render dashboard, your service, **Environment**: edit and save. Never commit a `.env` file. If a key is ever pasted into a chat,
