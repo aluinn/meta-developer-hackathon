@@ -5,6 +5,8 @@ from pathlib import Path
 import trimesh
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
+from labelling.meshio import load_mesh
+
 SCANS_DIR = Path(os.environ.get("SCANS_DIR") or Path(__file__).parent / "scans")  # set SCANS_DIR to use a mounted disk
 ALLOWED_EXTENSIONS = {".glb", ".obj"}
 MAX_UPLOAD_BYTES = 100 * 1024 * 1024
@@ -57,7 +59,7 @@ def _save_limited(file: UploadFile, dest: Path) -> None:
 
 def _load_mesh(path: Path) -> trimesh.Trimesh:
     try:
-        mesh = trimesh.load(path, force="mesh")
+        mesh = load_mesh(path)
     except Exception as exc:
         raise HTTPException(422, f"Could not read the mesh: {exc}") from exc
     if not isinstance(mesh, trimesh.Trimesh) or len(mesh.faces) == 0:

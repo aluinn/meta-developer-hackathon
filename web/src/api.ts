@@ -29,6 +29,10 @@ async function explain(res: Response): Promise<string> {
     // the body was not JSON; fall through to the generic messages
   }
   if (res.status === 413) return 'That file is too big. The limit is 100 MB.'
+  // 502/503/504 with no message from our server come from the hosting layer: the server is restarting, waking up or overloaded.
+  if ([502, 503, 504].includes(res.status) && !detail) {
+    return 'The server is busy or restarting. Wait a minute and try again.'
+  }
   if (res.status === 503) return 'The server is not set up to use the AI service yet (no API key).'
   if (res.status === 502) return 'The AI service had a problem. Please try again in a moment.'
   if (res.status === 422 && /no objects/i.test(detail)) {

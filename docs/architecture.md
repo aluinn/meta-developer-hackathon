@@ -185,6 +185,7 @@ We use **standard mode**, not `-contributor`, because contributor mode lets Meta
 Credits are $150 per person; each person claims their own.
 
 ## Known limits (say these in the demo)
+- **Memory:** the server host has 512 MB. Scan textures are shrunk to 2048 px on load (`labelling/meshio.py`); without that, a typical phone scan with an 8192 x 2560 texture crashed the deployed server.
 - **Scan quality decides everything.** The pipeline works on a clean, closed, box-shaped room (the bathroom scan: toilet and sink found in 5 views each,
   boxes on the right fixtures). It failed on a large open-plan room scan with a vaulted ceiling, big windows and outdoor ground in the mesh: SAM found only
   a plant. A2's cameras are placed from the scan's bounding box, so an irregular or partly-outdoor scan puts cameras outside the room, and the renders show the
