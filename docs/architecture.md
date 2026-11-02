@@ -64,7 +64,7 @@ Interactive docs while the server runs: http://localhost:8000/docs
 
 ## The world.json contract
 Metres, y-up. `position` is the box centre; `size` is [width x, height y, depth z] before rotation; `rotation_y` is in
-radians; `spawn`/`goal` are on the floor (`y = room.floor_y`, which is **not always 0** for real scans). Roles:
+radians, **positive = anticlockwise seen from above** (identical to three.js `rotation.y`; +90 degrees sends the box's local +x to world -z and local +z to world +x; the server uses the same matrix); `spawn`/`goal` are on the floor (`y = room.floor_y`, which is **not always 0** for real scans). Roles:
 `fixed`, `movable`, `climbable`, `passable`. Details: `shared/world.schema.json`.
 
 Things the web side should expect from real (not example) files:

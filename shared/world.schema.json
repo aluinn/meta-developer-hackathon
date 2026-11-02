@@ -57,7 +57,7 @@
           "maxItems": 3,
           "description": "[width (x), height (y), depth (z)], metres."
         },
-        "rotation_y": { "type": "number", "description": "Rotation around the y-axis, radians." }
+        "rotation_y": { "type": "number", "description": "Rotation of the box around the y-axis through its centre, in radians. Positive = anticlockwise seen from above (same as three.js rotation.y): a +90 degree (1.5708) turn sends the box's local +x axis to world -z and its local +z axis to world +x. size is [w, h, d] along local x, y, z before the rotation." }
       }
     }
   }

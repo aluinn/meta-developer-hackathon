@@ -31,7 +31,7 @@ real room into a playable 3D world. The server's AI pipeline turns a scan into
 `shared/world.schema.json` is the handover between server and web. Server outputs it, web consumes it.
 - Units metres, y-axis up. Fields: `version`, `source_scan`, `room{bounds{min,max}, floor_y}`,
   `objects[{id,label,role,confidence,position,size,rotation_y}]`, `spawn`, `goal`.
-- `role` is one of `fixed`, `movable`, `climbable`, `passable`. `position` is the box centre; `size` is [w,h,d]; `rotation_y` in radians.
+- `role` is one of `fixed`, `movable`, `climbable`, `passable`. `position` is the box centre; `size` is [w,h,d]; `rotation_y` in radians, positive = anticlockwise seen from above (same as three.js `rotation.y`).
 - `shared/example_world.json` must always validate against the schema. Changing the schema means updating the example, both sides, and telling the other person.
 
 ## Out of scope
