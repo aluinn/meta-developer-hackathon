@@ -48,7 +48,7 @@ when the service restarts, redeploys, or spins down after 15 idle minutes. So:
    - `MODEL_API_KEY`: paste your own Meta key here. Nowhere else.
    - `ALLOWED_ORIGINS`: only needed if the website is hosted somewhere else. With the all-in-one setup, enter `http://localhost:5173` (it just can't be left empty).
      Several are allowed, comma-separated, with no trailing slash or spaces.
-4. Click **Apply**. The first build takes a few minutes. Render shows the URL, like `https://room-world-server.onrender.com`.
+4. Click **Apply**. The first build takes a few minutes. Render shows the URL, like `https://your-service-name.onrender.com`.
 5. Check it: open `https://<your-url>/health`. You should see `{"status":"ok"}`. (First request after sleeping takes about a minute.)
    Then open `https://<your-url>/` for the website, and `https://<your-url>/docs` for the API test page.
 6. Every push to the branch Render watches rebuilds both the site and the server. (The build is longer now: it installs and builds the web app first.)
