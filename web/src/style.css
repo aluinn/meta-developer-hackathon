@@ -1407,3 +1407,72 @@ body[data-mode='work'] .screen-loading .spinner { border-color: rgba(42, 19, 48,
   .screen.leaving, .screen.entering, .view-area > canvas, .screen-results.playing .view-area { animation: none; }
 }
 .half-work .half-bg { opacity: 0.15; }
+
+/* =====================================================================
+   Meta-style pass: Meta blue, white and deep navy. Clean, flat, pill buttons, no glow, no gradients.
+   (Later rules override the earlier colour passes above.)
+   ===================================================================== */
+
+.landing { font-family: system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; background: #0c1e3b; }
+
+.half-game { background: #0c1e3b; color: #fff; }
+.half-game::before { background: none; }
+.half-game::after { content: none; }
+.half-game .half-bg { background-image: url('/img/game-bg.jpg'); opacity: 0.3; mix-blend-mode: normal; }
+
+.half-work { background: #ffffff; color: #1c2b33; }
+.half-work::before { background-image: none; }
+.half-work .half-bg { background-image: url('/img/work-bg.jpg'); opacity: 0.1; mix-blend-mode: multiply; }
+
+.half-eyebrow { font-weight: 700; letter-spacing: 0.14em; }
+.half-game .half-eyebrow { color: #6bb0ff; }
+.half-work .half-eyebrow { color: #0866ff; }
+
+.half-title { font-weight: 700; letter-spacing: -0.025em; }
+.half-game .half-title { font-style: normal; text-transform: none; text-shadow: none; color: #fff; }
+.half-work .half-title { color: #1c2b33; }
+.half-game .half-text { color: #c8d4e6; opacity: 1; }
+.half-work .half-text { color: #465a69; opacity: 1; }
+
+/* Pill buttons, flat. */
+.landing-btn { border-radius: 999px; font-size: 1rem; font-weight: 600; letter-spacing: 0; text-transform: none; font-style: normal; transition: background 0.15s ease, transform 0.1s ease; }
+.half-game .landing-btn-primary, .half-work .landing-btn-primary { background: #0866ff; color: #fff; box-shadow: none; }
+.half-game .landing-btn-primary:hover, .half-work .landing-btn-primary:hover { background: #2d7eff; }
+.landing-btn-primary:active { transform: scale(0.97); box-shadow: none !important; }
+.half-actions .landing-btn-primary { min-width: 10.5rem; }
+.landing-link { font-weight: 600; }
+.half-game .landing-link { color: #fff; }
+.half-work .landing-link { color: #0866ff; }
+
+.half-chips li { border-radius: 999px; font-weight: 600; }
+.half-game .half-chips li { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.22); color: #fff; }
+.half-work .half-chips li { background: #f0f2f5; border: 0; color: #1c2b33; }
+
+.half-game .rows div { border-color: rgba(255, 255, 255, 0.18); }
+.half-game .rows dt { color: #6bb0ff; }
+.half-game .rows dd { color: #c8d4e6; }
+
+.case { border: 0; border-radius: 1rem; background: #f0f2f5; color: #1c2b33; }
+.case span span { color: #5b6b78; }
+.case-icon { color: #0866ff; }
+
+/* Dark half and white half already make the split; no divider line. */
+.seam { display: none; }
+
+.landing-brand h1 { font-weight: 700; letter-spacing: 0.22em; color: #fff; }
+.landing-brand p { color: rgba(255, 255, 255, 0.75); }
+.landing-foot { color: rgba(255, 255, 255, 0.6); }
+
+/* Results and loading: navy for game mode, light grey and white for work mode. */
+body[data-mode='game'] { --bg: #0c1e3b; --panel: #12294d; --text: #ffffff; --muted: #a9b8cf; --accent: #2d7eff; --accent-text: #ffffff; --border: #28436d; }
+body[data-mode='work'] { --bg: #f0f2f5; --panel: #ffffff; --text: #1c2b33; --muted: #65676b; --accent: #0866ff; --accent-text: #ffffff; --border: #ced0d4; }
+.screen-results[data-mode='game'] .tab[aria-selected='true'] { background: #2d7eff; color: #fff; }
+body[data-mode='game'] .screen-loading { background: #0c1e3b; color: #fff; }
+body[data-mode='game'] .screen-loading .spinner { border-color: rgba(255, 255, 255, 0.18); border-top-color: #2d7eff; }
+body[data-mode='work'] .screen-loading { background: #f0f2f5; color: #1c2b33; }
+body[data-mode='work'] .screen-loading .lead { color: #1c2b33; }
+body[data-mode='work'] .screen-loading .spinner { border-color: rgba(8, 102, 255, 0.18); border-top-color: #0866ff; }
+.landing-notes .error { background: #fff; color: #b42318; border-color: #b42318; }
+.landing-notes .file-info { background: #fff; color: #1c2b33; border-color: #ced0d4; }
+.half-game .landing-btn-primary, .half-work .landing-btn-primary { text-transform: none; font-style: normal; letter-spacing: 0; animation: none; }
+.half-work .half-bg { opacity: 0.08; }
