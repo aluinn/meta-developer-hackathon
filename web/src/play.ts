@@ -9,12 +9,14 @@ import { angleDiff, createFollowCamera } from './followCamera.ts'
 import { createInput, hasTouch } from './input.ts'
 import { MOVE, newMotionState, stepCharacter } from './motion.ts'
 import { CHARACTER, FIXED_DT, buildPhysicsWorld, createCharacterBody, freePhysics, initPhysics } from './physics.ts'
+import { OBJECT_LABEL, SPAWN_MARKER } from './roomScene.ts'
 import { createStage } from './stage.ts'
 import type { World } from './world.ts'
 
 const GOAL_RADIUS = 0.5 // metres, measured across the floor
 const FALL_LIMIT = 3 // metres below the floor: respawn
 const MAX_STEPS_PER_FRAME = 5 // if the phone stalls, skip ahead rather than freeze
+const CAMERA_WALL_SLACK = 1 // metres the camera may go past the (undrawn) room walls; furniture always blocks it
 
 // Debug switches, read from the page address: e.g. http://localhost:5173/?colliders&fps
 const params = new URLSearchParams(window.location.search)
@@ -39,6 +41,11 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
   // ---- Drawing ----
   const stage = createStage(container)
   stage.setRoom(world)
+  // Keep the view clear while playing: no furniture labels, and no Start pole sticking through
+  // the character. The Goal marker stays, so you can always see where to go.
+  stage.scene.traverse((obj) => {
+    if (obj.name === OBJECT_LABEL || obj.name === SPAWN_MARKER) obj.visible = false
+  })
   const model = createCharacterModel()
   stage.scene.add(model)
 
@@ -47,7 +54,7 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
   // Spawn and goal sit on the floor (use floor_y, never assume 0).
   const spawnFeet = new THREE.Vector3(world.spawn[0], floorY, world.spawn[2])
   const goal = new THREE.Vector3(world.goal[0], floorY, world.goal[2])
-  const physics = buildPhysicsWorld(world)
+  const { physics, isWall } = buildPhysicsWorld(world)
   const character = createCharacterBody(physics, [spawnFeet.x, spawnFeet.y, spawnFeet.z])
   let motion = newMotionState()
 
@@ -120,13 +127,16 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
   }
   restart.addEventListener('click', restartRun)
 
-  /** How far the camera can go from `from` along `dir` before hitting a wall or furniture. */
+  /** How far the camera can go from `from` along `dir`: stopped by furniture and the floor, or a little past a wall. */
   const ray = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 1 })
   function clearDistance(from: THREE.Vector3, dir: THREE.Vector3, max: number): number {
     ray.origin = { x: from.x, y: from.y, z: from.z }
     ray.dir = { x: dir.x, y: dir.y, z: dir.z }
-    const hit = physics.castRay(ray, max, true, undefined, undefined, character.collider)
-    return hit ? hit.timeOfImpact : max
+    const cast = (wantWalls: boolean) =>
+      physics.castRay(ray, max, true, undefined, undefined, character.collider, undefined, (c) => isWall(c) === wantWalls)
+    const solid = cast(false)
+    const wall = cast(true)
+    return Math.min(max, solid ? solid.timeOfImpact : max, wall ? wall.timeOfImpact + CAMERA_WALL_SLACK : max)
   }
 
   let fpsFrames = 0

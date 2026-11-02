@@ -1,6 +1,7 @@
 // Third-person camera: sits behind and above the character and glides after it.
 // While you run, it slowly swings round behind you; dragging the view turns it by hand.
-// It is pulled in closer when a wall or furniture is between it and the character.
+// In tight spots (a wall right behind you) it rises up over the character rather than
+// squashing into it, and it is pulled in closer if something is still in the way.
 
 import * as THREE from 'three'
 
@@ -9,7 +10,9 @@ const MIN_DISTANCE = 0.6
 const HEAD_HEIGHT = 1.4 // look at the character's head, not its feet
 const DRAG_SPEED = 0.005 // radians per pixel dragged
 const MIN_PITCH = 0.05
-const MAX_PITCH = 1.2
+const MAX_PITCH = 1.2 // highest you can drag to
+const MAX_AUTO_PITCH = 1.45 // in tight corners the camera may rise this high (almost straight down)
+const ENOUGH_ROOM = 2.5 // metres of clear space behind the character that counts as "fine"
 const FOLLOW_RATE = 2 // how quickly it swings behind you while running
 const MANUAL_PAUSE = 1.5 // seconds of no auto-swing after you drag the view
 
@@ -41,14 +44,19 @@ export interface FollowCamera {
 export function createFollowCamera(camera: THREE.PerspectiveCamera): FollowCamera {
   // yaw 0 = the camera is on the +z side of the character, looking towards -z.
   let yaw = 0
-  let pitch = 0.35
+  let pitch = 0.35 // the angle you chose (by dragging)
+  let usedPitch = 0.35 // the angle actually used: higher than `pitch` when there's no room behind
   let distance = DISTANCE
   let manualTimer = 0
   const target = new THREE.Vector3()
   const dir = new THREE.Vector3()
 
+  function setDir(p: number): THREE.Vector3 {
+    return dir.set(Math.sin(yaw) * Math.cos(p), Math.sin(p), Math.cos(yaw) * Math.cos(p))
+  }
+
   function place(): void {
-    dir.set(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch))
+    setDir(usedPitch)
     camera.position.copy(target).addScaledVector(dir, distance)
     camera.lookAt(target)
   }
@@ -58,6 +66,7 @@ export function createFollowCamera(camera: THREE.PerspectiveCamera): FollowCamer
     reset: (feet, facing) => {
       yaw = facing + Math.PI // behind = opposite the way it faces
       pitch = 0.35
+      usedPitch = pitch
       distance = DISTANCE
       target.set(feet.x, feet.y + HEAD_HEIGHT, feet.z)
       place()
@@ -80,9 +89,21 @@ export function createFollowCamera(camera: THREE.PerspectiveCamera): FollowCamer
       const wanted = new THREE.Vector3(feet.x, feet.y + HEAD_HEIGHT, feet.z)
       target.lerp(wanted, 1 - Math.exp(-12 * dt))
 
+      // Find the lowest angle (starting from yours) with enough room behind the character.
+      let bestPitch = pitch
+      let bestClear = 0
+      for (let p = pitch; p <= MAX_AUTO_PITCH + 1e-6; p += 0.1) {
+        const c = clearDistance(target, setDir(p), DISTANCE)
+        if (c > bestClear) {
+          bestClear = c
+          bestPitch = p
+        }
+        if (c >= ENOUGH_ROOM) break
+      }
+      usedPitch += (bestPitch - usedPitch) * (1 - Math.exp(-6 * dt)) // ease up/down, no sudden jumps
+
       // Don't go through walls: stop just in front of whatever is behind us.
-      dir.set(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch))
-      const clear = Math.max(MIN_DISTANCE, clearDistance(target, dir, DISTANCE) - 0.25)
+      const clear = Math.max(MIN_DISTANCE, clearDistance(target, setDir(usedPitch), DISTANCE) - 0.25)
       // Move in instantly (so we never sit inside a wall), move back out gently.
       distance = clear < distance ? clear : distance + (clear - distance) * (1 - Math.exp(-4 * dt))
       place()

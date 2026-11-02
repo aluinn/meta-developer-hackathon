@@ -28,7 +28,7 @@ export function initPhysics(): Promise<void> {
 }
 
 /** Add a fixed (never moving) box. `centre` is the middle; `half` is half of [w, h, d]; turned by `rotationY` radians. */
-function addBox(physics: RAPIER.World, centre: Vec3, half: Vec3, rotationY = 0): void {
+function addBox(physics: RAPIER.World, centre: Vec3, half: Vec3, rotationY = 0): RAPIER.Collider {
   // A turn of `rotationY` around the y axis, as a quaternion. three.js uses the same convention,
   // so the collider turns exactly like the drawn box.
   const s = Math.sin(rotationY / 2)
@@ -36,11 +36,17 @@ function addBox(physics: RAPIER.World, centre: Vec3, half: Vec3, rotationY = 0):
   const desc = RAPIER.ColliderDesc.cuboid(half[0], half[1], half[2])
     .setTranslation(centre[0], centre[1], centre[2])
     .setRotation({ x: 0, y: s, z: 0, w: c })
-  physics.createCollider(desc)
+  return physics.createCollider(desc)
+}
+
+export interface PhysicsRoom {
+  physics: RAPIER.World
+  /** True for the four invisible room walls (the camera may go a little way past these). */
+  isWall: (collider: RAPIER.Collider) => boolean
 }
 
 /** A Rapier world with the floor, invisible walls and every solid object from world.json. */
-export function buildPhysicsWorld(world: World): RAPIER.World {
+export function buildPhysicsWorld(world: World): PhysicsRoom {
   const physics = new RAPIER.World({ x: 0, y: 0, z: 0 }) // we apply gravity to the character ourselves
   physics.timestep = FIXED_DT
 
@@ -60,10 +66,15 @@ export function buildPhysicsWorld(world: World): RAPIER.World {
   const top = Math.max(max[1], floorY) + WALL_EXTRA_HEIGHT
   const wallY = (bottom + top) / 2
   const halfH = (top - bottom) / 2
-  addBox(physics, [min[0] - T / 2, wallY, cz], [T / 2, halfH, halfD + T])
-  addBox(physics, [max[0] + T / 2, wallY, cz], [T / 2, halfH, halfD + T])
-  addBox(physics, [cx, wallY, min[2] - T / 2], [halfW + T, halfH, T / 2])
-  addBox(physics, [cx, wallY, max[2] + T / 2], [halfW + T, halfH, T / 2])
+  const walls = new Set<number>()
+  for (const wall of [
+    addBox(physics, [min[0] - T / 2, wallY, cz], [T / 2, halfH, halfD + T]),
+    addBox(physics, [max[0] + T / 2, wallY, cz], [T / 2, halfH, halfD + T]),
+    addBox(physics, [cx, wallY, min[2] - T / 2], [halfW + T, halfH, T / 2]),
+    addBox(physics, [cx, wallY, max[2] + T / 2], [halfW + T, halfH, T / 2]),
+  ]) {
+    walls.add(wall.handle)
+  }
 
   // Furniture. Passable things (rug, door) get no collider: you walk over or through them.
   for (const obj of world.objects) {
@@ -71,7 +82,7 @@ export function buildPhysicsWorld(world: World): RAPIER.World {
     const [w, h, d] = obj.size
     addBox(physics, obj.position, [w / 2, h / 2, d / 2], obj.rotation_y)
   }
-  return physics
+  return { physics, isWall: (collider) => walls.has(collider.handle) }
 }
 
 export interface CharacterBody {
