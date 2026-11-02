@@ -119,8 +119,8 @@ export interface ClearanceResult {
  *
  * Plus `reachable`: can they get from the start to the goal at all?
  *
- * Accuracy: the grid is 5 cm, and gaps are fine-tuned to about 1 cm. That is much finer than the sizes from phone LiDAR,
- * which are themselves estimates.
+ * Accuracy: the grid is 5 cm, but each cell is checked at 25 points (see FloorMap.room), so gaps are measured to about 1 cm,
+ * then rounded down. That is much finer than the sizes from phone LiDAR, which are themselves estimates.
  */
 /** Clearance at which a route counts as roomy (a gap of 1.2 m, the widest setting on the slider). Also the "comfort" distance. */
 const ROOMY_M = 0.6
@@ -145,6 +145,14 @@ export interface FloorMap {
   minZ: number
   /** Clearance of each cell's centre, metres. 0 = covered by furniture, or outside the room. */
   clearance: Float32Array
+  /**
+   * The most room anywhere in each cell (the best of 5 x 5 points across it, edges included), metres. The person's middle can
+   * be anywhere in a cell, so they fit in it if this is at least half their width. The fit decision AND every gap we report
+   * both come from these numbers, so a reported gap can never disagree with the verdict.
+   */
+  room: Float32Array
+  /** The point in cell `index` with the most room. */
+  roomiestPoint: (index: number) => FloorPoint
   openCells: number
   /** The cell that point (x, z) is in, or -1 if it's outside the grid. */
   cellAt: (x: number, z: number) => number
@@ -202,27 +210,54 @@ export function buildFloorMap(world: World): FloorMap {
   const nz = Math.ceil(sizeZ / cellM - 1e-9)
   const footprints = blockingFootprints(world)
 
-  const clearanceAt = (x: number, z: number): number => {
+  /** Distance from (x, z) to the nearest wall or to the nearest of `boxes`. */
+  const clearanceAmong = (boxes: Footprint[], x: number, z: number): number => {
     // The room's edges count as walls.
     let c = Math.min(x - minX, max[0] - x, z - minZ, max[2] - z)
     if (c <= 0) return 0
-    for (const f of footprints) {
+    for (const f of boxes) {
       c = Math.min(c, distanceToFootprint(f, x, z))
       if (c === 0) return 0
     }
     return c
   }
+  const clearanceAt = (x: number, z: number): number => clearanceAmong(footprints, x, z)
+
+  // The 5 x 5 points across a cell (as fractions of a cell from its centre) used for `room`. The centre comes first.
+  const SPOTS = [0, -0.5, -0.25, 0.25, 0.5]
+  const roomiestIn = (boxes: Footprint[], cx: number, cz: number): { room: number; at: FloorPoint } => {
+    let best = { room: -1, at: { x: cx, z: cz } }
+    for (const a of SPOTS) {
+      for (const b of SPOTS) {
+        const x = cx + a * cellM
+        const z = cz + b * cellM
+        const c = clearanceAmong(boxes, x, z)
+        if (c > best.room) best = { room: c, at: { x, z } }
+      }
+    }
+    return best
+  }
 
   const clearance = new Float32Array(nx * nz)
+  const room = new Float32Array(nx * nz)
   let openCells = 0
   for (let j = 0; j < nz; j++) {
     const z = minZ + (j + 0.5) * cellM
     for (let i = 0; i < nx; i++) {
-      const c = clearanceAt(minX + (i + 0.5) * cellM, z)
+      const x = minX + (i + 0.5) * cellM
+      const c = clearanceAt(x, z)
       clearance[i + j * nx] = c
       if (c > 0) openCells++
+      // Only boxes this close to the centre can be the nearest one for some point in the cell, so skip the rest (it's faster).
+      const nearby = footprints.filter((f) => distanceToFootprint(f, x, z) <= c + 1.5 * cellM)
+      room[i + j * nx] = roomiestIn(nearby, x, z).room
     }
   }
+
+  const centre = (index: number): FloorPoint => ({
+    x: minX + ((index % nx) + 0.5) * cellM,
+    z: minZ + (Math.floor(index / nx) + 0.5) * cellM,
+  })
 
   return {
     cellM,
@@ -231,6 +266,11 @@ export function buildFloorMap(world: World): FloorMap {
     minX,
     minZ,
     clearance,
+    room,
+    roomiestPoint: (index) => {
+      const c = centre(index)
+      return roomiestIn(footprints, c.x, c.z).at
+    },
     openCells,
     clearanceAt,
     cellAt: (x, z) => {
@@ -238,7 +278,7 @@ export function buildFloorMap(world: World): FloorMap {
       const j = Math.floor((z - minZ) / cellM)
       return i < 0 || j < 0 || i >= nx || j >= nz ? -1 : i + j * nx
     },
-    centre: (index) => ({ x: minX + ((index % nx) + 0.5) * cellM, z: minZ + (Math.floor(index / nx) + 0.5) * cellM }),
+    centre,
   }
 }
 
@@ -342,8 +382,14 @@ function walkBack(cameFrom: Int32Array, end: number): number[] {
 
 // ---------- The steps of the check ----------
 
+/** A point in `cell` where a person with this radius fits: its centre if possible, else its roomiest point. */
+function spotIn(map: FloorMap, cell: number, radius: number): FloorPoint {
+  return map.clearance[cell] >= radius ? map.centre(cell) : map.roomiestPoint(cell)
+}
+
 /** The cell for the start or goal: the one it's in if the person fits there, else the nearest cell within SNAP_LIMIT_M where they fit. */
-function placePoint(map: FloorMap, p: FloorPoint, fits: (cell: number) => boolean): { cell: number; snap: Snap | null } | null {
+function placePoint(map: FloorMap, p: FloorPoint, radius: number): { cell: number; snap: Snap | null } | null {
+  const fits = (cell: number) => map.room[cell] >= radius
   const own = map.cellAt(p.x, p.z)
   if (own !== -1 && fits(own)) return { cell: own, snap: null }
   const reach = Math.ceil(SNAP_LIMIT_M / map.cellM) + 1
@@ -364,7 +410,8 @@ function placePoint(map: FloorMap, p: FloorPoint, fits: (cell: number) => boolea
     }
   }
   if (best === -1) return null
-  return { cell: best, snap: { from: p, to: map.centre(best), movedCm: Math.round(bestDistance * 100) } }
+  const to = spotIn(map, best, radius)
+  return { cell: best, snap: { from: p, to, movedCm: Math.round(Math.hypot(to.x - p.x, to.z - p.z) * 100) } }
 }
 
 /** Every cell the person's middle can get to from `start` (a "flood fill"). */
@@ -433,7 +480,7 @@ function aStar(map: FloorMap, start: number, goal: number, fits: (cell: number) 
   }
   // Each step costs its length, plus extra when it is close to furniture (less than ROOMY_M away).
   const nearFurniture = (cell: number): number =>
-    1 + (COMFORT_WEIGHT * Math.max(0, ROOMY_M - map.clearance[cell])) / ROOMY_M
+    1 + (COMFORT_WEIGHT * Math.max(0, ROOMY_M - map.room[cell])) / ROOMY_M
 
   const open = new MinHeap()
   cost[start] = 0
@@ -497,12 +544,12 @@ function widestRoute(
  */
 function tightestOnRoute(map: FloorMap, cells: number[], skip: (cell: number) => boolean = () => false): number {
   let tightest = Infinity
-  for (const c of cells) if (!skip(c)) tightest = Math.min(tightest, map.clearance[c])
+  for (const c of cells) if (!skip(c)) tightest = Math.min(tightest, map.room[c])
   if (tightest === Infinity) return -1
   let best: [number, number] = [-1, -1]
   let runStart = -1
   for (let k = 0; k <= cells.length; k++) {
-    const tied = k < cells.length && !skip(cells[k]) && map.clearance[cells[k]] <= tightest + 1e-6
+    const tied = k < cells.length && !skip(cells[k]) && map.room[cells[k]] <= tightest + 1e-6
     if (tied && runStart === -1) runStart = k
     if (!tied && runStart !== -1) {
       if (best[0] === -1 || k - 1 - runStart > best[1] - best[0]) best = [runStart, k - 1]
@@ -513,25 +560,11 @@ function tightestOnRoute(map: FloorMap, cells: number[], skip: (cell: number) =>
 }
 
 /**
- * Measure the gap at cells[k]. The route only passes through cell centres, so it can miss the exact middle of a gap by up to
- * half a cell. So look SIDEWAYS across the route (half a cell either way, every tenth of a cell) for the roomiest spot: that is
- * the true middle of the gap, and its clearance is half the gap's width. (Not along the route: that would walk out of the gap.)
+ * The gap at a cell: twice the room there, in whole cm, and the point in the middle of it. Rounded DOWN, so a gap never looks
+ * wider than it is (and "a 85 cm gap" can never be shown for a gap that is really 84.9 cm and blocks an 85 cm wheelchair).
  */
-function measureGap(map: FloorMap, cells: number[], k: number): { clearance: number; at: FloorPoint } {
-  const p = map.centre(cells[k])
-  const before = map.centre(cells[Math.max(0, k - 1)])
-  const after = map.centre(cells[Math.min(cells.length - 1, k + 1)])
-  let best = { clearance: map.clearanceAt(p.x, p.z), at: p }
-  const length = Math.hypot(after.x - before.x, after.z - before.z)
-  if (length === 0) return best
-  const sideX = -(after.z - before.z) / length // at right angles to the direction of travel
-  const sideZ = (after.x - before.x) / length
-  for (let s = -5; s <= 5; s++) {
-    const q = { x: p.x + (sideX * s * map.cellM) / 10, z: p.z + (sideZ * s * map.cellM) / 10 }
-    const c = map.clearanceAt(q.x, q.z)
-    if (c > best.clearance) best = { clearance: c, at: q }
-  }
-  return best
+function gapAt(map: FloorMap, cell: number): { cm: number; at: FloorPoint } {
+  return { cm: Math.floor(map.room[cell] * 200 + 1e-4), at: map.roomiestPoint(cell) }
 }
 
 /**
@@ -593,7 +626,7 @@ export function checkClearance(world: World, personWidthM: number): ClearanceRes
   const startTime = performance.now()
   const map = floorMapFor(world)
   const radius = personWidthM / 2
-  const fits = (cell: number) => map.clearance[cell] >= radius
+  const fits = (cell: number) => map.room[cell] >= radius
   const spawn = toPoint(world.spawn)
   const goalPoint = toPoint(world.goal)
 
@@ -624,7 +657,7 @@ export function checkClearance(world: World, personWidthM: number): ClearanceRes
     return result
   }
 
-  const start = placePoint(map, spawn, fits)
+  const start = placePoint(map, spawn, radius)
   if (!start) {
     result.blockedAt = { at: spawn, reason: 'start', gapCm: null }
     return finish()
@@ -638,7 +671,7 @@ export function checkClearance(world: World, personWidthM: number): ClearanceRes
   for (const v of result.reachableArea) areaCells += v
   result.reachablePercent = map.openCells === 0 ? 0 : (100 * areaCells) / map.openCells
 
-  const goal = placePoint(map, goalPoint, fits)
+  const goal = placePoint(map, goalPoint, radius)
   if (!goal) {
     result.blockedAt = { at: goalPoint, reason: 'goal', gapCm: null }
     return finish()
@@ -647,10 +680,10 @@ export function checkClearance(world: World, personWidthM: number): ClearanceRes
 
   if (!reached[goal.cell]) {
     // No route. Find where it's blocked: the tightest spot on the best "almost" route (the roomiest route over any open floor)...
-    const almost = widestRoute(map, start.cell, goal.cell, (cell) => map.clearance[cell] > 0, (cell) => map.clearance[cell])
+    const almost = widestRoute(map, start.cell, goal.cell, (cell) => map.room[cell] > 0, (cell) => map.room[cell])
     if (almost) {
-      const gap = measureGap(map, almost.cells, tightestOnRoute(map, almost.cells))
-      result.blockedAt = { at: gap.at, reason: 'gap', gapCm: Math.round(gap.clearance * 200) }
+      const gap = gapAt(map, almost.cells[tightestOnRoute(map, almost.cells)])
+      result.blockedAt = { at: gap.at, reason: 'gap', gapCm: gap.cm }
     } else {
       // ...or, if furniture seals the goal off completely, the reachable spot that gets closest to the goal.
       let closest = start.cell
@@ -679,23 +712,23 @@ export function checkClearance(world: World, personWidthM: number): ClearanceRes
   const cellNearEnds = (cell: number) => isNearEnds[cell] === 1
 
   // How roomy is the roomiest route? Then take the shortest route that is that roomy (anything over ROOMY_M is roomy enough).
-  const roomiest = widestRoute(map, start.cell, goal.cell, fits, (cell) => (cellNearEnds(cell) ? Infinity : map.clearance[cell]))
+  const roomiest = widestRoute(map, start.cell, goal.cell, fits, (cell) => (cellNearEnds(cell) ? Infinity : map.room[cell]))
   const need = Math.max(radius, Math.min(roomiest ? roomiest.room : radius, ROOMY_M))
-  const cells = aStar(map, start.cell, goal.cell, (cell) => fits(cell) && (cellNearEnds(cell) || map.clearance[cell] >= need))
+  const cells = aStar(map, start.cell, goal.cell, (cell) => fits(cell) && (cellNearEnds(cell) || map.room[cell] >= need))
 
-  // Begin and end exactly at the start and goal (or where they were moved to), not at the middle of their cells.
-  const points = [startAt, ...cells.slice(1, -1).map(map.centre), goalAt]
+  // Begin and end exactly at the start and goal (or where they were moved to). In between, a point in each cell with room.
+  const points = [startAt, ...cells.slice(1, -1).map((cell) => spotIn(map, cell, need)), goalAt]
   result.reachable = true
   result.path = smoothRoute(map, points, radius, nearEnds)
   for (let k = 1; k < result.path.length; k++) {
     result.pathLengthM += Math.hypot(result.path[k].x - result.path[k - 1].x, result.path[k].z - result.path[k - 1].z)
   }
 
-  // (b) The narrowest gap on the way: twice the smallest clearance on the route, away from the start and goal.
+  // (b) The narrowest gap on the way: twice the smallest room on the route, away from the start and goal.
   const k = tightestOnRoute(map, cells, cellNearEnds)
-  if (k !== -1 && map.clearance[cells[k]] < ROOMY_M) {
-    const gap = measureGap(map, cells, k)
-    result.narrowestGapCm = Math.round(gap.clearance * 200)
+  if (k !== -1 && map.room[cells[k]] < ROOMY_M) {
+    const gap = gapAt(map, cells[k])
+    result.narrowestGapCm = gap.cm
     result.narrowestAt = gap.at
   }
   return finish()

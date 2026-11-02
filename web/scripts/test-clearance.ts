@@ -197,8 +197,31 @@ for (const [title, path] of [
   }
 }
 
-// ---- 8. Speed ----
-console.log('\n8. Speed')
+// ---- 8. The verdict and the gap never disagree ----
+console.log('\n8. Every width from 0.40 to 1.20 m (1 cm steps), in every test room: the gap shown never contradicts the verdict')
+{
+  const rooms: Array<[string, World]> = [
+    ['example', load('../../shared/example_world.json')],
+    ['narrow-gap', load('../src/clearance_test_world.json')],
+    ['0.8 m gap', gapWorld],
+    ['0.8 m gap, off the grid', room(wallWithGap(-0.33, 0.47), [-2, -1.2], [2, 1.2])],
+    ['turned table', room([box('table', 0, 0.3, 1.1, 0.6, { turn: 0.7 }), box('shelf', 0, -1.5, 3, 1)], [-2, 0], [2, 0])],
+  ]
+  const problems: string[] = []
+  let checks = 0
+  for (const [name, world] of rooms) {
+    for (let cm = 40; cm <= 120; cm++) {
+      const r = checkClearance(world, cm / 100)
+      checks++
+      if (!r.reachable && r.blockedAt?.gapCm != null && r.blockedAt.gapCm >= cm) problems.push(`${name} ${cm} cm: blocked by a ${r.blockedAt.gapCm} cm gap`)
+      if (r.reachable && r.narrowestGapCm !== null && r.narrowestGapCm < cm) problems.push(`${name} ${cm} cm: got through a ${r.narrowestGapCm} cm gap`)
+    }
+  }
+  check(problems.length === 0, `${checks} checks, no contradictions${problems.length ? ': ' + problems.slice(0, 5).join('; ') : ''}`)
+}
+
+// ---- 9. Speed ----
+console.log('\n9. Speed')
 {
   const example = load('../../shared/example_world.json')
   const time = (world: World, width: number, runs: number) => {
