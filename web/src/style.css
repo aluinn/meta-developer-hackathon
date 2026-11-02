@@ -698,7 +698,7 @@ p:focus {
 
 /* Phone held upright (or a narrow window): the 3D view on top, the panel scrolls underneath. */
 @media (max-width: 899px) and (min-height: 501px) {
-  .layout-open .view-area {
+  .layout-open .work-body {
     flex: 0 0 38dvh;
   }
 
@@ -730,7 +730,7 @@ p:focus {
     grid-area: header;
   }
 
-  .layout-open .view-area {
+  .layout-open .work-body {
     grid-area: view;
   }
 
@@ -755,6 +755,11 @@ p:focus {
   .clearance-score {
     font-size: 1rem;
   }
+}
+
+/* Work mode's room details give way to the Layout panel while it is open (there is no room for both next to the 3D view). */
+.screen-results.layout-open .work-panel {
+  display: none !important;
 }
 
 /* The panel's own width decides its layout (it may be a narrow side column on a wide screen). */
@@ -1910,10 +1915,7 @@ body[data-mode='work'] .screen-loading .spinner { border-color: rgba(8, 102, 255
 .half-game .landing-btn-primary, .half-work .landing-btn-primary { text-transform: none; font-style: normal; letter-spacing: 0; animation: none; }
 .half-work .half-bg { opacity: 0.08; }
 
-/* Layout panel with the work-mode wrapper: on phones the panel replaces the whole view row. Work mode keeps only the Layout tab. */
-@media (max-width: 700px), (max-height: 500px) {
-  .layout-open .work-body { display: none; }
-}
+/* Work mode keeps only the Layout tab. (The 3D view stays visible with the Layout panel open: the clearance check and before/after draw on it.) */
 .screen-results[data-mode='work'] .tabbar { display: grid; grid-template-columns: 1fr; width: 12rem; }
 .screen-results[data-mode='work'] .tab[data-tab='play'],
 .screen-results[data-mode='work'] .tab[data-tab='character'] { display: none; }
