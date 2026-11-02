@@ -39,7 +39,9 @@ returns at once** (202), then it asks `GET /scan/{id}/status` every 2 seconds un
 shown by the existing viewer. The job (`server/jobs.py`) runs the labelling (A2) and then the roles (A3). Why a job: the free host is slow (labelling took about 100 s there) and hosting layers often
 cut a single request off at about 100 s; now no request lasts more than a second or so, and the Loading screen shows real progress ("Looking for furniture… 64%").
 Status is `{state: queued|running|done|error, step: rendering|labelling|roles|done, percent, error_kind: no_key|no_objects|ai_service|failed}`. Only **one job runs at a time** (the 512 MB host cannot take two);
-others wait with state `queued`. Jobs live in memory, so if the server restarts the status answers 404 and the website says so. A few lost SAM questions (under a quarter) are tolerated; each AI request has a timeout (SAM 45 s, others 120 s) with 2 retries.
+others wait with state `queued`. **Each job runs in its own worker process** (`server/labelling/worker.py`, started as `python -m labelling.worker process ...`; it reports progress as JSON lines on stdout) and so does the
+upload's loading/simplifying step (`worker.py prepare`). Reason: Python does not give freed memory back, so on the 512 MB host the *second* scan crashed the whole server (the first job left about 350 MB behind).
+A process that exits returns everything. If a worker is killed (out of memory) the job reports `out_of_memory`; a worker that hangs is killed after 10 minutes. Jobs live in memory, so if the server restarts the status answers 404 and the website says so. A few lost SAM questions (under a quarter) are tolerated; each AI request has a timeout (SAM 45 s, others 120 s) with 2 retries.
 Failures become plain-English messages on the Upload screen (wrong file type, over 100 MB, unreadable file, no furniture found, AI service problem, server restarted, server unreachable). The older `POST /scan/{id}/label` and `/world` endpoints still work and are used by scripts. Addresses are relative (`/scan`), so it works the same on
 the deployed site and, via the proxy in `web/vite.config.ts`, under `npm run dev`. One scan takes about 45 seconds and costs about $0.25 in Meta credits.
 Not yet connected: Layout tab (`/layout`), voice (`/transcribe`), before/after (`/render`) and the score (`/score`). Test: `node web/scripts/test-api.ts`.
@@ -189,7 +191,7 @@ We use **standard mode**, not `-contributor`, because contributor mode lets Meta
 Credits are $150 per person; each person claims their own.
 
 ## Known limits (say these in the demo)
-- **Memory:** the server host has 512 MB. Scan textures are shrunk to 2048 px on load (`labelling/meshio.py`); without that, a typical phone scan with an 8192 x 2560 texture crashed the deployed server.
+- **Memory:** the server host has 512 MB. Scan textures are shrunk to 2048 px on load (`labelling/meshio.py`), and the heavy work runs in short-lived worker processes (see above). Measured locally on the bathroom scan: web server about 100 to 150 MB, `prepare` worker about 260 MB, `process` worker about 300 MB (never at the same time as `prepare`), three jobs in a row with no growth. That leaves a margin of roughly 100 MB on the host, not a lot. The other endpoints (`/score`, `/render`, `/layout`, `/transcribe`, `/scan/{id}/label`) still do their work inside the web server process; wire them to the website only after checking their memory, or move them into workers too.
 - **Scan quality decides everything.** The pipeline works on a clean, closed, box-shaped room (the bathroom scan: toilet and sink found in 5 views each,
   boxes on the right fixtures). It failed on a large open-plan room scan with a vaulted ceiling, big windows and outdoor ground in the mesh: SAM found only
   a plant. A2's cameras are placed from the scan's bounding box, so an irregular or partly-outdoor scan puts cameras outside the room, and the renders show the

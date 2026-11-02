@@ -109,7 +109,7 @@ for (const [key, reply, expected] of cases) {
 
 // 5. the background job can fail, and says why
 const jobFails: [string, string][] = [
-  ['no_key', 'no API key'], ['no_objects', "couldn't find any furniture"], ['ai_service', 'AI service had a problem'], ['failed', 'Something went wrong'], ['something_new', 'Something went wrong'],
+  ['no_key', 'no API key'], ['no_objects', "couldn't find any furniture"], ['ai_service', 'AI service had a problem'], ['out_of_memory', 'too big for the free server'], ['failed', 'Something went wrong'], ['something_new', 'Something went wrong'],
 ]
 for (const [kind, expected] of jobFails) {
   const m = await failAt('GET /scan/<id>/status', [job('running', 'labelling', 10), job('error', 'labelling', 10, kind)])
