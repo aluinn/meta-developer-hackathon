@@ -35,7 +35,7 @@ export const PROFILES: Record<ProfileName, Profile> = {
   human: {
     character: { height: 1.6, radius: 0.25, stepHeight: 0.3, skin: 0.01, snapToGround: 0.2, stepMinWidth: 0.15 },
     move: { runSpeed: 4, gravity: 20, jumpSpeed: 7, coyoteTime: 0.1, jumpBuffer: 0.12, flyRise: 3, flySink: 1.5, groundAccel: 11, groundBrake: 15, airAccel: 6 },
-    camera: { distance: 6.5, minDistance: 0.8, headHeight: 1.4, enoughRoom: 4, wallClearance: 0.25, pitch: 0.5 }, // far enough back to see the hazards coming
+    camera: { distance: 4, minDistance: 0.6, headHeight: 1.4, enoughRoom: 2.5, wallClearance: 0.25, pitch: 0.35 },
     goalRadius: 0.5,
     goalHeightSlack: 1,
     markerScale: 1,

@@ -6,7 +6,7 @@ import RAPIER from '@dimforge/rapier3d-compat'
 import * as THREE from 'three'
 import { createCharacter } from './character.ts'
 import { createColliderDebug, type ColliderDebug } from './colliderDebug.ts'
-import { angleDiff, createFollowCamera } from './followCamera.ts'
+import { CAMERA, angleDiff, createFollowCamera } from './followCamera.ts'
 import { createInput, hasTouch } from './input.ts'
 import { generateCourse } from './course.ts'
 import { Game, TUNING, ITEM_INFO, type GameEvent } from './game.ts'
@@ -67,6 +67,8 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
     }
   }
   const profile = applyProfile(scanMesh ? 'tiny' : 'human') // sizes, speeds and camera distances for this kind of room
+  // In the race the person-sized character needs the camera further back, to see the hazards coming. (The profile itself keeps its original numbers.)
+  if (!scanMesh && !CLASSIC) Object.assign(CAMERA, { distance: 6.5, minDistance: 0.8, enoughRoom: 4, pitch: 0.5 })
   stage.camera.near = profile.cameraNear
   stage.camera.far = profile.cameraFar
   stage.camera.updateProjectionMatrix()
