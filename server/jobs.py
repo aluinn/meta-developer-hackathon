@@ -53,7 +53,7 @@ JOBS: dict[str, Job] = {}
 _locks: dict[int, asyncio.Lock] = {}
 
 
-def _one_at_a_time() -> asyncio.Lock:
+def heavy_lock() -> asyncio.Lock:
     """One lock per running event loop (a lock made at import would be tied to the wrong loop in tests)."""
     return _locks.setdefault(id(asyncio.get_running_loop()), asyncio.Lock())
 
@@ -71,7 +71,7 @@ def _scan_dir(scan_id: str):
 async def _run(scan_id: str, job: Job, prompts: list[str]) -> None:
     """Run the labelling and roles in a separate process (labelling/worker.py) and follow the progress lines it prints."""
     scan_dir = SCANS_DIR / scan_id
-    async with _one_at_a_time():
+    async with heavy_lock():
         job.state, job.step = "running", "rendering"
         proc = await asyncio.create_subprocess_exec(
             sys.executable, "-m", "labelling.worker", "process", str(scan_dir), json.dumps(prompts),

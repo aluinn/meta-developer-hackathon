@@ -5,7 +5,7 @@ import { formatSize } from './format.ts'
 import { buildLegend } from './legend.ts'
 
 export type ScreenName = 'upload' | 'loading' | 'results'
-export type TabName = 'play' | 'layout'
+export type TabName = 'play' | 'layout' | 'character'
 
 export interface ScreenHandlers {
   onFileChosen: (file: File) => void
@@ -14,6 +14,7 @@ export interface ScreenHandlers {
   onUseTestRoom?: () => void
   onStartOver: () => void
   onPlay: () => void
+  onCharacter: () => void
 }
 
 export interface Screens {
@@ -134,6 +135,7 @@ function buildResults(h: ScreenHandlers) {
   tabs.append(
     makeTab('play', 'Play', h.onPlay),
     makeTab('layout', 'Layout', () => {}),
+    makeTab('character', 'Character', h.onCharacter),
   )
 
   section.append(header, view, tabs)

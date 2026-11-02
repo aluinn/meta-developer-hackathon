@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from characters import router as characters_router
 from jobs import router as jobs_router
 from labels import router as labels_router
 from layout import router as layout_router
@@ -25,6 +26,7 @@ app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_methods=
 app.include_router(scans_router)
 app.include_router(labels_router)
 app.include_router(jobs_router)
+app.include_router(characters_router)
 app.include_router(layout_router)
 app.include_router(render_router)
 app.include_router(score_router)

@@ -55,6 +55,33 @@ def prepare(scan_dir: Path) -> None:
     emit(event="prepared", triangles_before=before, triangles_after=len(simplified.faces))
 
 
+def make_character(out_path: Path, prompt: str) -> None:
+    """Draw a character with Muse Image, remove the white background and save a 512 px transparent PNG."""
+    from PIL import Image
+    from .muse_image import ImageApiError, generate_image, white_background_to_transparent
+
+    try:
+        factory = os.environ.get("ROOM_WORLD_AI_FACTORY")
+        if factory:  # tests only
+            image = importlib.import_module(factory).generate_image(prompt)
+        else:
+            key = os.environ.get("MODEL_API_KEY")
+            if not key:
+                emit(event="error", kind="no_key", message="MODEL_API_KEY is not set.")
+                return
+            image = generate_image(prompt, key)
+        picture = white_background_to_transparent(image)
+        picture.thumbnail((512, 512), Image.LANCZOS)
+        picture.save(out_path, optimize=True)
+        emit(event="done")
+    except ImageApiError as exc:
+        log.error("image service error: %s", exc)
+        emit(event="error", kind="ai_service", message="The image service had a problem.")
+    except Exception as exc:
+        log.exception("drawing failed")
+        emit(event="error", kind="failed", message=type(exc).__name__)
+
+
 def _ai_clients():
     """The real Meta clients, or (for tests only) the ones from the module named in ROOM_WORLD_AI_FACTORY."""
     name = os.environ.get("ROOM_WORLD_AI_FACTORY")
@@ -98,6 +125,8 @@ def main(argv: list[str]) -> None:
         prepare(scan_dir)
     elif command == "process":
         asyncio.run(process(scan_dir, json.loads(argv[3])))
+    elif command == "character":  # character <out.png> <prompt json>; argv[2] is the output file, not a scan folder
+        make_character(scan_dir, json.loads(argv[3]))
     else:
         raise SystemExit(f"unknown command {command!r}")
 

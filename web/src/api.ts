@@ -28,7 +28,7 @@ export class ApiError extends Error {
 }
 
 /** Turn a failed response into a plain-English message. */
-async function explain(res: Response): Promise<string> {
+async function explain(res: Response, showServerMessage = false): Promise<string> {
   let detail = ''
   try {
     const body: unknown = await res.json()
@@ -44,6 +44,8 @@ async function explain(res: Response): Promise<string> {
   if ([502, 503, 504].includes(res.status) && !detail) {
     return 'The server is busy or restarting. Wait a minute and try again.'
   }
+  if (res.status === 429 && !detail) return 'Too many requests. Please wait a minute and try again.'
+  if (showServerMessage && detail) return detail // for endpoints whose messages are already written for the player
   if (res.status === 503) return 'The server is not set up to use the AI service yet (no API key).'
   if (res.status === 502) return 'The AI service had a problem. Please try again in a moment.'
   if (res.status === 422 && /no objects/i.test(detail)) {
@@ -55,13 +57,13 @@ async function explain(res: Response): Promise<string> {
   return detail || `The server returned an error (${res.status}).`
 }
 
-async function request(path: string, init: RequestInit = {}, timeoutMs = STEP_TIMEOUT_MS): Promise<Response> {
+async function request(path: string, init: RequestInit = {}, timeoutMs = STEP_TIMEOUT_MS, showServerMessage = false): Promise<Response> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
     const res = await fetch(apiBase + path, { ...init, signal: controller.signal })
     if (!res.ok) {
-      const error = new ApiError(await explain(res))
+      const error = new ApiError(await explain(res, showServerMessage))
       error.status = res.status
       throw error
     }
@@ -166,4 +168,21 @@ export async function processScan(file: File, onStatus: (message: string) => voi
   onStatus('Building your room…')
   const world = (await request(`/world/${scanId}`)).json()
   return parseWorld(await world)
+}
+
+const CHARACTER_TIMEOUT_MS = 150 * 1000 // drawing takes about 20 seconds, but a busy server can be slower
+
+function bytesToDataUrl(bytes: ArrayBuffer, type: string): string {
+  const view = new Uint8Array(bytes)
+  let binary = ''
+  for (let i = 0; i < view.length; i += 0x8000) binary += String.fromCharCode(...view.subarray(i, i + 0x8000))
+  return `data:${type};base64,${btoa(binary)}`
+}
+
+/** Ask the server to draw an original character from a short description. Returns the picture as a data: URL (a transparent PNG). */
+export async function generateCharacter(description: string): Promise<string> {
+  const text = description.trim()
+  if (text.length < 3 || text.length > 80) throw new ApiError('Describe your character in 3 to 80 characters.')
+  const res = await request('/character', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ description: text }) }, CHARACTER_TIMEOUT_MS, true)
+  return bytesToDataUrl(await res.arrayBuffer(), 'image/png')
 }
