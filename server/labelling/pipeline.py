@@ -8,7 +8,7 @@ import numpy as np
 import trimesh
 from PIL import Image
 
-from .render import View, make_cameras, render_view, vertex_colors_from_original
+from .render import Camera, View, make_cameras, render_view, vertex_colors_from_original
 from .types import PROMPTS, Detection, Segmenter
 from .vote import group_objects, vote_faces
 
@@ -90,3 +90,18 @@ async def label_scan(scan_dir: Path, segmenter: Segmenter, labeller_name: str, p
     }
     (scan_dir / "labels.json").write_text(json.dumps(output, indent=2))
     return output
+
+
+def revote_scan(scan_dir: Path) -> dict:
+    """Redo the 3D voting and object grouping from the saved masks. Costs nothing: no SAM calls."""
+    labels = json.loads((scan_dir / "labels.json").read_text())
+    mesh = trimesh.load(scan_dir / "simplified.glb", force="mesh")
+    views = [
+        View(c["view"], Camera.from_dict(c), np.zeros((1, 1, 3), dtype=np.uint8), np.load(scan_dir / "views" / f"view_{c['view']}_face_id.npy"))
+        for c in labels["cameras"]
+    ]
+    prompts = labels["prompts"]
+    face_labels, agreement = vote_faces(mesh, views, load_masks(scan_dir), prompts)
+    labels["objects"] = [o.to_dict() for o in group_objects(mesh, face_labels, agreement, prompts)]
+    (scan_dir / "labels.json").write_text(json.dumps(labels, indent=2))
+    return labels

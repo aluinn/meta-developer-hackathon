@@ -58,7 +58,7 @@ def main() -> None:
     original_world_text = (scan_dir / "world.json").read_text()
 
     # 1. a faithful world scores high
-    good = asyncio.run(score_scan(scan_dir, sam()))
+    good = asyncio.run(score_scan(scan_dir, sam(), "sam_on_render"))
     show("FAITHFUL WORLD", good)
     if good["overall_percent"] is None or good["overall_percent"] < 75:
         failures.append(f"a faithful world should score at least 75%, got {good['overall_percent']}")
@@ -92,15 +92,36 @@ def main() -> None:
     if not any(u["label"] == "sofa" for u in gone["unmatched_scan_detections"]):
         failures.append("a sofa in the scan but not in the world should be reported as unmatched")
 
+    # 3b. silhouette method (the default): needs no SAM at all
+    (scan_dir / "world.json").write_text(original_world_text)
+    sil = asyncio.run(score_scan(scan_dir))
+    show("SILHOUETTE METHOD, faithful world (no API calls)", sil)
+    if sil["method_name"] != "silhouette" or sil["overall_percent"] is None or sil["overall_percent"] < 80:
+        failures.append(f"silhouette score of a faithful world should be at least 80%, got {sil['overall_percent']}")
+    (scan_dir / "world.json").write_text(json.dumps(moved))
+    sil_bad = asyncio.run(score_scan(scan_dir))
+    t_good = next(o for o in sil["objects"] if o["id"] == "table_1")["score_percent"]
+    t_bad = next(o for o in sil_bad["objects"] if o["id"] == "table_1")["score_percent"]
+    print(f"silhouette: table {t_good}% -> {t_bad}% after moving it 1.2 m")
+    if t_bad is None or t_good is None or t_bad > 0.2 * t_good:
+        failures.append("silhouette: moving the table should cut its score sharply")
+    (scan_dir / "world.json").write_text(json.dumps(missing))
+    if not any(u["label"] == "sofa" for u in asyncio.run(score_scan(scan_dir))["unmatched_scan_detections"]):
+        failures.append("silhouette: a missing sofa should be reported as unmatched")
+
     # 4. endpoint: caching, refresh, errors
     (scan_dir / "world.json").write_text(original_world_text)
     score_api.SCANS_DIR = root
     score_api.make_segmenter = lambda: sam()
     client = TestClient(app)
     time.sleep(0.05)
-    first = client.get(f"/score/{SCAN_ID}")
-    second = client.get(f"/score/{SCAN_ID}")
-    third = client.get(f"/score/{SCAN_ID}?refresh=true")
+    first = client.get(f"/score/{SCAN_ID}?method=sam_on_render")
+    second = client.get(f"/score/{SCAN_ID}?method=sam_on_render")
+    third = client.get(f"/score/{SCAN_ID}?method=sam_on_render&refresh=true")
+    if client.get(f"/score/{SCAN_ID}").json().get("cached") is not False:
+        failures.append("asking for another method must not be served from the other method's cache")
+    if client.get(f"/score/{SCAN_ID}?method=nonsense").status_code != 422:
+        failures.append("an unknown method should be 422")
     print("\nendpoint: first cached=%s, second cached=%s, refresh cached=%s, overall=%s%%" % (first.json().get("cached"), second.json().get("cached"), third.json().get("cached"), first.json().get("overall_percent")))
     if (first.status_code, first.json()["cached"], second.json()["cached"], third.json()["cached"]) != (200, False, True, False):
         failures.append("caching/refresh behaviour is wrong")
@@ -110,8 +131,10 @@ def main() -> None:
     score_api.make_segmenter = score_api.SamClient
     saved = os.environ.pop("MODEL_API_KEY", None)
     try:
-        if client.get(f"/score/{SCAN_ID}").status_code != 503:
-            failures.append("missing key with no cached score should be 503")
+        if client.get(f"/score/{SCAN_ID}?method=sam_on_render&refresh=true").status_code != 503:
+            failures.append("sam_on_render with no key should be 503")
+        if client.get(f"/score/{SCAN_ID}?refresh=true").status_code != 200:
+            failures.append("the silhouette method needs no key and should work without one")
     finally:
         if saved:
             os.environ["MODEL_API_KEY"] = saved

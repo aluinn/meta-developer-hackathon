@@ -32,6 +32,6 @@ audio to WAV if it is installed on the server host. ffmpeg is LGPL or GPL depend
 shipping it in a container.
 
 ## Assets
-- `web/public/assets/character.png` (once generated): original character made with Meta's `muse-image-1.0` from the prompt in
+- `web/public/assets/character.png` (generated 2026-11-02): original character made with Meta's `muse-image-1.0` from the prompt in
   `docs/character-prompt.md`. No existing character, brand or third-party artwork is used. Check Meta's terms for generated
   images before submission.
