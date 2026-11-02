@@ -12,6 +12,27 @@ Add a new entry at the TOP after each work session. Copy the template.
 - Next:
 ```
 
+## Decisions (branch feature/layout-and-clearance, worked unattended)
+- Branched from `origin/main` as told. That means this branch does not contain Aluinn's still-unmerged work on `aluinn/start` (floor rings, the drawing animation, the big example room); those merge separately.
+- **Zac's clearance check already exists on `main`** (`clearance.ts`, `clearancePanel.ts`, `clearanceView.ts`, `test-clearance.ts`, merged in PR #17). Stage 2 said "create clearance.ts", but writing a second one would clash with it and duplicate it, so I reused Zac's `checkClearance(world, widthM)` and only added tests. His presets are Walking 0.50 / Walker 0.70 / Wheelchair 0.85 m (the brief said 0.60 / 0.75 / 0.90). I kept Zac's numbers: they are planning assumptions either way, and the sliders cover any width. **A human should pick the final numbers.**
+- The brief's own example ("a 0.7 m gap passes standard and walker") only holds for Zac's 0.50 / 0.70 presets, not 0.60 / 0.75 (0.75 > 0.70), which is one more reason to keep his.
+- Stage 1: `layout(goal, world)` takes the goal and the world (not a separate scan id) and works out the scan id itself from `world.source_scan`. For rooms that were not uploaded (example rooms) it sends a placeholder id of 32 zeros plus the world; the server only needs the id to look like one when `world` is sent along (`LayoutRequest.scan_id` pattern in `server/layout.py`, and it only writes `layout.json` when that scan folder exists). **Aluinn: please check that a real `/layout` call with the placeholder id works.**
+- The pretend `/layout` answer lives in `web/src/fakeLayout.ts` (pure, no page code), switched on by `USE_FAKE_SERVER` in `config.ts`, rather than inside `config.ts` itself. It moves the first movable object that is not already in the middle of the room (the example room's coffee table sits exactly at the centre, so "first movable" would never move).
+- `api.ts` got `setFakeServer()` (tests only) so the real request path can be tested even while `USE_FAKE_SERVER` is true. `transcribe()` uses the same switch.
+- Rearrange and Before/After are only offered in Work mode ("everything below is Work mode"). Zac's clearance panel stays on the Layout tab and works in both modes, as he built it. The Clearance section was NOT moved to the Work mode side panel; it is extended there with Before/After instead.
+
+## 2026-11-02 - Aluinn (layout stage 2: clearance logic)
+- What I did: nothing to write: `web/src/clearance.ts` (Zac's, on `main`) already does everything stage 2 asked for (5 cm grid, roomiest route, narrowest gap, blocked point, `floor_y` handled, passable things ignored). Added section 10 to `web/scripts/test-clearance.ts`: moving one object changes the answer (a wheelchair blocked by a 50 cm gap gets through after a movable wardrobe slides 60 cm; a walking person fits both times).
+- What worked / what didn't: `node scripts/test-clearance.ts`: 54 passed, 0 failed.
+- AI tools used (and for what): Claude Code.
+- Next: stage 3 (Rearrange on the Layout tab).
+
+## 2026-11-02 - Aluinn (layout stage 1: /layout in the API layer)
+- What I did: `layout(goal, world)` in `web/src/api.ts` (POST /layout, returns `world`, `changes`, `notes`, `attempts` and `spawnToGoalWalkable`), `layoutErrorMessage()` (422: no valid arrangement, nothing changed; 503: AI not set up; 502; anything else), network, timeout and "answer was nonsense" messages, and the pretend answer in `web/src/fakeLayout.ts`.
+- What worked / what didn't: `node scripts/test-api.ts` passes with new cases for the request body, the placeholder scan id, every error code, a network failure, a timeout, a bad answer and the pretend server. No real server or Meta call was made.
+- AI tools used (and for what): Claude Code.
+- Next: stage 2 (see above), then the Rearrange button.
+
 ## 2026-11-02 - Aluinn (smoother play)
 - What I did: Removed fall damage (lives are only lost to rolling hazards; falling off the scan just puts you back at the last gate). Smoother movement: the character now speeds up and slows down over about a tenth of a second instead of snapping, steers a bit less sharply in the air, and loses its speed when it hits a wall. Added a soft shadow under the character that shows where you will land (the 2D-picture-in-3D-room depth problem) and raised the default camera angle a little so jumps are easier to judge.
 - What worked / what didn't: Rules, course, camera and physics tests pass; a browser run showed the shadow under a jump. Not yet tried by a person: tune `groundAccel`, `groundBrake`, `airAccel` in `web/src/motion.ts`, and the camera `pitch` in `profile.ts`.
