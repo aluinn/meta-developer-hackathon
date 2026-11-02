@@ -1,4 +1,6 @@
 import './style.css'
+import { setLayoutGoal } from './layoutGoal.ts'
+import { createLayoutPanel, type LayoutPanel } from './layoutPanel.ts'
 import type { PlayMode } from './play.ts'
 import { createScreens } from './screens.ts'
 import { createViewer, type Viewer } from './viewer.ts'
@@ -16,6 +18,8 @@ function wait(ms: number): Promise<void> {
 let world: World | null = null
 let viewer: Viewer | null = null
 let play: PlayMode | null = null
+let layout: LayoutPanel | null = null // the Layout tab's panel (exists once it has been opened)
+let layoutOpen = false
 // Bumped whenever we leave a mode, so a slow-loading play mode knows it's no longer wanted.
 let session = 0
 
@@ -25,6 +29,10 @@ function closeAll(): void {
   viewer = null
   play?.dispose()
   play = null
+  layout?.dispose() // also turns the microphone off
+  layout = null
+  layoutOpen = false
+  screens.setLayoutOpen(false)
   screens.setPlaying(false)
   screens.setViewMessage('')
 }
@@ -32,6 +40,18 @@ function closeAll(): void {
 function showViewer(): void {
   closeAll()
   if (world) viewer = createViewer(screens.viewContainer, world)
+}
+
+/** The Layout tab opens the panel; pressing it again closes it. The 3D view stays underneath. */
+function toggleLayout(): void {
+  if (!world || play) return
+  layoutOpen = !layoutOpen
+  if (layoutOpen) {
+    layout ??= createLayoutPanel(screens.layoutContainer)
+  } else {
+    layout?.stopRecording() // closing the panel must not leave the microphone on
+  }
+  screens.setLayoutOpen(layoutOpen)
 }
 
 async function enterPlay(): Promise<void> {
@@ -65,6 +85,7 @@ async function openWorld(title: string, load: () => Promise<World>): Promise<voi
   try {
     const [loaded] = await Promise.all([load(), wait(1000)])
     world = loaded
+    setLayoutGoal('') // a new room, so the old goal no longer applies
     const n = loaded.objects.length
     screens.setResultsSummary(title, `${n} ${n === 1 ? 'object' : 'objects'} found`)
     screens.show('results') // show first, so the 3D area has a real size when the viewer starts
@@ -85,6 +106,8 @@ const screens = createScreens(root, {
   onUseTestRoom: import.meta.env.DEV ? () => openWorld('Test room', loadTestWorld) : undefined,
 
   onPlay: () => void enterPlay(),
+
+  onLayout: toggleLayout,
 
   onStartOver: () => {
     closeAll()

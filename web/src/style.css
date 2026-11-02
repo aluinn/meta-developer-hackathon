@@ -548,3 +548,149 @@ p:focus {
     height: 5rem;
   }
 }
+
+/* ---- Layout panel (voice or typed goal) ---- */
+
+.layout-box {
+  max-height: 55dvh;
+  overflow-y: auto;
+  padding: 1rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  touch-action: pan-y; /* this panel may scroll; the 3D view's rules don't apply here */
+}
+
+.layout-title {
+  margin: 0 0 0.25rem;
+  font-size: 1.2rem;
+}
+
+.layout-hint,
+.layout-status {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.mic-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 0.75rem 0;
+}
+
+.mic-btn {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 4.5rem;
+  height: 4.5rem;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-text);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mic-btn.recording {
+  background: #d92d20;
+  color: #ffffff;
+}
+
+.mic-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.mic-text {
+  font-weight: 600;
+}
+
+.rec-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #d92d20;
+}
+
+.rec-timer {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.rec-dot {
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 50%;
+  background: #d92d20;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rec-dot {
+    animation: none;
+  }
+}
+
+.layout-status,
+.layout-panel .error {
+  margin: 0.25rem 0 0.5rem;
+}
+
+.layout-label {
+  display: block;
+  margin-top: 0.5rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.goal-box {
+  display: block;
+  width: 100%;
+  margin: 0.4rem 0 0.75rem;
+  padding: 0.7rem 0.8rem;
+  border: 2px solid var(--border);
+  border-radius: 0.7rem;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit; /* 18px: bigger than 16px, so iPhones don't zoom the page when you tap it */
+  resize: vertical;
+}
+
+.goal-current {
+  margin-top: 0.75rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.download-link {
+  display: inline-block;
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+  color: var(--accent);
+}
+
+.layout-panel .btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Short screens (phone held sideways): the panel takes the place of the 3D view. */
+@media (max-height: 500px) {
+  .layout-open .view-area {
+    display: none;
+  }
+
+  .layout-box {
+    flex: 1;
+    max-height: none;
+  }
+}
