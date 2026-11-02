@@ -61,22 +61,46 @@ class View:
     face_id: np.ndarray  # (H, W) int32, -1 where no surface
 
 
+EYE_FRACTION_OF_HEIGHT = 0.55  # eye height as a share of the room's height, capped below
+MIN_EYE_HEIGHT = 0.5
+CLEARANCE_RADIUS = 0.35  # a camera needs this much open space around it (metres)
+RING_FRACTIONS = (0.6, 0.45, 0.75, 0.3, 0.9)  # try these distances from the centre, in order
+
+
 def make_cameras(mesh: trimesh.Trimesh, count: int = NUM_VIEWS) -> list[Camera]:
-    """Place cameras on a ring inside the room, each looking at the room centre."""
+    """Place cameras on a ring inside the room, each looking at the room centre.
+
+    The eye height scales with the room (a 1.7 m tall scan must not get cameras at 1.5 m) and each camera slides along its ring
+    direction to the first spot with open space around it, so it does not end up inside a sofa or against a wall.
+    Works best on a clean, roughly box-shaped room. A scan that includes outdoor ground or a very irregular footprint can
+    still put cameras outside the room (see docs/architecture.md, known limits).
+    """
+    verts = mesh.vertices
     lo, hi = mesh.bounds
+    floor = float(np.percentile(verts[:, 1], 2))
+    height = hi[1] - floor
+    eye_y = floor + min(max(EYE_FRACTION_OF_HEIGHT * height, MIN_EYE_HEIGHT), CAMERA_HEIGHT_ABOVE_FLOOR)
     centre = (lo + hi) / 2
     half = (hi - lo) / 2
-    eye_y = min(lo[1] + CAMERA_HEIGHT_ABOVE_FLOOR, hi[1] - 0.2)
-    target = np.array([centre[0], lo[1] + 0.6 * (hi[1] - lo[1]) / 2 + 0.3, centre[2]])
+    target = np.array([centre[0], floor + 0.35 * height, centre[2]])
+    in_band = verts[(verts[:, 1] > floor + 0.2) & (verts[:, 1] < eye_y + 0.1)]
+
+    def crowding(x: float, z: float) -> int:
+        return int((np.hypot(in_band[:, 0] - x, in_band[:, 2] - z) < CLEARANCE_RADIUS).sum())
+
     cameras = []
     for k in range(count):
         angle = 2 * np.pi * k / count
-        eye = np.array([
-            centre[0] + CAMERA_RING * half[0] * np.cos(angle),
-            eye_y,
-            centre[2] + CAMERA_RING * half[2] * np.sin(angle),
-        ])
-        cameras.append(Camera(position=eye, look_at=target))
+        best = None
+        for fraction in RING_FRACTIONS:
+            x = centre[0] + fraction * half[0] * np.cos(angle)
+            z = centre[2] + fraction * half[2] * np.sin(angle)
+            crowd = crowding(x, z)
+            if best is None or crowd < best[0]:
+                best = (crowd, x, z)
+            if crowd == 0:
+                break
+        cameras.append(Camera(position=np.array([best[1], eye_y, best[2]]), look_at=target))
     return cameras
 
 

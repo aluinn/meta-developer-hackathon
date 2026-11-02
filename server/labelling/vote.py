@@ -10,7 +10,7 @@ from .render import View
 from .types import Detection
 
 MIN_VOTE = 0.3  # a face needs at least this much summed confidence for its label
-MIN_VIEWS = 2  # ...from at least this many views (or all views that can see it, if fewer)
+MIN_VIEWS = 2  # ...from at least this many views (a surface only one view can see cannot be cross-checked, so it stays unlabelled)
 MIN_FACES = 40  # ignore specks
 MIN_SIZE_M = 0.15  # ignore objects whose largest side is smaller than this
 MERGE_MARGIN_M = 0.05  # same-label patches whose boxes come within this of each other are one object
@@ -69,7 +69,7 @@ def vote_faces(
     best = score.argmax(axis=1)
     best_score = score[np.arange(n_faces), best]
     best_views = views_with_label[np.arange(n_faces), best]
-    enough_views = best_views >= np.minimum(MIN_VIEWS, seen_in_views)
+    enough_views = best_views >= MIN_VIEWS
     keep = (best_score >= MIN_VOTE) & enough_views & (seen_in_views > 0)
     agreement = np.where(seen_in_views > 0, best_views / np.maximum(seen_in_views, 1), 0.0)
     return np.where(keep, best, -1), agreement

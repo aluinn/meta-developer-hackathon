@@ -166,6 +166,10 @@ We use **standard mode**, not `-contributor`, because contributor mode lets Meta
 Credits are $150 per person; each person claims their own.
 
 ## Known limits (say these in the demo)
+- **Scan quality decides everything.** The pipeline works on a clean, closed, box-shaped room (the bathroom scan: toilet and sink found in 5 views each,
+  boxes on the right fixtures). It failed on a large open-plan room scan with a vaulted ceiling, big windows and outdoor ground in the mesh: SAM found only
+  a plant. A2's cameras are placed from the scan's bounding box, so an irregular or partly-outdoor scan puts cameras outside the room, and the renders show the
+  back of the mesh. Rescan smaller, simpler rooms, and look at `labels_overview.png` before trusting a result.
 - A2 only finds what we ask SAM to look for (`prompts` in `POST /scan/{id}/label`; default is living-room furniture). A bathroom needs `["toilet", "sink", ...]`.
 - A real scan's mesh is patchy, so A2 merges same-label patches whose boxes come within 5 cm. Two separate same-label objects touching each other would merge into one.
 - Phone LiDAR sizes are approximate; all measurements are estimates.
