@@ -1,6 +1,7 @@
 // Talks to our server (see docs/architecture.md). Addresses are RELATIVE ("/scan", not "http://localhost:8000/scan"):
 // in production the server also serves this page, and in development Vite forwards these paths (vite.config.ts).
 
+import { USE_FAKE_SERVER } from './config.ts'
 import { parseWorld, type World } from './world.ts'
 
 const MAX_SCAN_BYTES = 100 * 1024 * 1024 // the server's limit
@@ -185,4 +186,75 @@ export async function generateCharacter(description: string): Promise<string> {
   if (text.length < 3 || text.length > 80) throw new ApiError('Describe your character in 3 to 80 characters.')
   const res = await request('/character', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ description: text }) }, CHARACTER_TIMEOUT_MS, true)
   return bytesToDataUrl(await res.arrayBuffer(), 'image/png')
+}
+
+// ---- Voice: turn a recording into text (Z5) ----
+
+const FAKE_TRANSCRIPT = 'Move the coffee table next to the sofa so a wheelchair can get through'
+const TRANSCRIBE_TIMEOUT_MS = 60 * 1000
+
+const VOICE_NOT_REACHED =
+  "Couldn't reach the server. Is it running? (If it was asleep, try again in a minute.) You can still type your goal instead."
+
+/** Turn a /transcribe error code into a sentence for a person. The codes are from the server's contract (docs/architecture.md). */
+export function transcribeErrorMessage(status: number): string {
+  switch (status) {
+    case 400:
+      return 'The recording was empty. Check your microphone and try again, or type your goal instead.'
+    case 413:
+      return 'That recording is too big to send. Try a shorter one, or type your goal instead.'
+    case 415:
+      return "The server couldn't read that audio. Try again, or type your goal instead."
+    case 502:
+      return 'The voice service had a problem. Try again in a moment, or type your goal instead.'
+    case 503:
+      return "Voice isn't set up on the server yet, so type your goal instead."
+    default:
+      return `Something went wrong talking to the server (error ${status}). Type your goal instead.`
+  }
+}
+
+function voiceError(message: string, status = 0): ApiError {
+  const error = new ApiError(message)
+  error.status = status
+  return error
+}
+
+/** Send a recording (a 16 kHz mono WAV) to the server and get back what was said. */
+export async function transcribe(wav: Blob): Promise<string> {
+  if (USE_FAKE_SERVER) {
+    await sleep(1000)
+    return FAKE_TRANSCRIPT
+  }
+
+  // The server expects a form with ONE file field called "audio".
+  const form = new FormData()
+  form.append('audio', wav, 'recording.wav')
+
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), TRANSCRIBE_TIMEOUT_MS)
+  let response: Response
+  try {
+    response = await fetch(apiBase + '/transcribe', { method: 'POST', body: form, signal: controller.signal })
+  } catch {
+    throw voiceError(VOICE_NOT_REACHED) // no network, the server is down, or it took too long
+  } finally {
+    clearTimeout(timer)
+  }
+
+  if (!response.ok) {
+    // The server always explains its own errors in a JSON body like {"detail": "..."}. A server error WITHOUT that
+    // comes from the Vite proxy (nothing listening on port 8000) or a host that is asleep or restarting.
+    const body: unknown = await response.json().catch(() => null)
+    const fromServer = typeof body === 'object' && body !== null && 'detail' in body
+    const message = !fromServer && response.status >= 500 ? VOICE_NOT_REACHED : transcribeErrorMessage(response.status)
+    throw voiceError(message, response.status)
+  }
+
+  // A good answer looks like {"transcript": "...", "duration_ms": 1234}. duration_ms can be null.
+  const data: unknown = await response.json().catch(() => null)
+  if (typeof data !== 'object' || data === null || !('transcript' in data) || typeof data.transcript !== 'string') {
+    throw voiceError("The server's answer wasn't what we expected. Type your goal instead.", response.status)
+  }
+  return data.transcript.trim()
 }

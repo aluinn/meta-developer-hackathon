@@ -273,7 +273,7 @@ p:focus {
 
 .tabbar {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr); /* Play, Layout, Character */
   gap: 0.5rem;
   padding: 0.35rem;
   background: var(--panel);
@@ -313,7 +313,7 @@ p:focus {
 
   .tabbar {
     align-self: center;
-    width: 22rem;
+    width: 28rem;
   }
 }
 
@@ -341,7 +341,7 @@ p:focus {
 
   .tabbar {
     align-self: center;
-    width: 16rem;
+    width: 21rem;
     padding: 0.2rem;
   }
 
@@ -546,6 +546,200 @@ p:focus {
   .jump-btn {
     width: 5rem;
     height: 5rem;
+  }
+}
+
+/* ---- Layout panel (voice or typed goal) ---- */
+
+.layout-box {
+  max-height: 55dvh;
+  overflow-y: auto;
+  padding: 1rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  touch-action: pan-y; /* this panel may scroll; the 3D view's rules don't apply here */
+}
+
+.layout-title {
+  margin: 0 0 0.25rem;
+  font-size: 1.2rem;
+}
+
+.layout-hint,
+.layout-status {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.mic-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 0.75rem 0;
+}
+
+.mic-btn {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 4.5rem;
+  height: 4.5rem;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-text);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mic-btn.recording {
+  background: #d92d20;
+  color: #ffffff;
+}
+
+.mic-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.mic-text {
+  font-weight: 600;
+}
+
+.rec-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #d92d20;
+}
+
+.rec-indicator {
+  flex-wrap: wrap;
+  row-gap: 0;
+}
+
+.rec-timer {
+  flex-basis: 100%; /* the clock sits on its own line under "Recording" */
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rec-dot {
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 50%;
+  background: #d92d20;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rec-dot {
+    animation: none;
+  }
+}
+
+.layout-status,
+.layout-panel .error {
+  margin: 0.25rem 0 0.5rem;
+}
+
+.layout-label {
+  display: block;
+  margin-top: 0.5rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.goal-box {
+  display: block;
+  width: 100%;
+  margin: 0.4rem 0 0.75rem;
+  padding: 0.7rem 0.8rem;
+  border: 2px solid var(--border);
+  border-radius: 0.7rem;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit; /* 18px: bigger than 16px, so iPhones don't zoom the page when you tap it */
+  resize: vertical;
+}
+
+.goal-current {
+  margin-top: 0.75rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.download-link {
+  display: inline-block;
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+  color: var(--accent);
+}
+
+.layout-panel .btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* On a phone (narrow or short screen) the panel takes the place of the 3D view: press Layout again to go back. */
+@media (max-width: 700px), (max-height: 500px) {
+  .layout-open .view-area {
+    display: none;
+  }
+
+  .layout-box {
+    flex: 1;
+    max-height: none;
+  }
+}
+
+/* Wide enough: mic on the left, text box on the right. */
+.layout-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+@media (min-width: 640px) {
+  .layout-panel {
+    flex-direction: row;
+    gap: 1.5rem;
+  }
+
+  .layout-speak {
+    flex: 0 0 38%;
+  }
+
+  .layout-write {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .layout-label {
+    margin-top: 0;
+  }
+}
+
+@media (max-height: 500px) {
+  .layout-box {
+    padding: 0.6rem 1rem;
+  }
+
+  .layout-hint {
+    display: none;
+  }
+
+  .mic-row {
+    margin: 0.4rem 0;
   }
 }
 
@@ -1476,3 +1670,12 @@ body[data-mode='work'] .screen-loading .spinner { border-color: rgba(8, 102, 255
 .landing-notes .file-info { background: #fff; color: #1c2b33; border-color: #ced0d4; }
 .half-game .landing-btn-primary, .half-work .landing-btn-primary { text-transform: none; font-style: normal; letter-spacing: 0; animation: none; }
 .half-work .half-bg { opacity: 0.08; }
+
+/* Layout panel with the work-mode wrapper: on phones the panel replaces the whole view row. Work mode keeps only the Layout tab. */
+@media (max-width: 700px), (max-height: 500px) {
+  .layout-open .work-body { display: none; }
+}
+.screen-results[data-mode='work'] .tabbar { display: grid; grid-template-columns: 1fr; width: 12rem; }
+.screen-results[data-mode='work'] .tab[data-tab='play'],
+.screen-results[data-mode='work'] .tab[data-tab='character'] { display: none; }
+.screen-results.playing .layout-box { display: none; }
