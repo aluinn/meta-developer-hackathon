@@ -38,8 +38,11 @@ function clock(seconds: number): string {
 export function createLayoutPanel(container: HTMLElement): LayoutPanel {
   const panel = el('div', 'layout-panel')
 
-  panel.append(el('h2', 'layout-title', 'Change the layout'))
-  panel.append(el('p', 'layout-hint', 'Say or type what you want, like "make room for a wheelchair".'))
+  // Two halves: speaking (left on wide screens) and the text box (right). Stacked on a phone.
+  const speak = el('div', 'layout-speak')
+  const write = el('div', 'layout-write')
+  speak.append(el('h2', 'layout-title', 'Change the layout'))
+  speak.append(el('p', 'layout-hint', 'Say or type what you want, like "make room for a wheelchair".'))
 
   // ---- Mic button, recording indicator and timer ----
   const micRow = el('div', 'mic-row')
@@ -82,7 +85,9 @@ export function createLayoutPanel(container: HTMLElement): LayoutPanel {
   const download = el('a', 'download-link', 'Download my recording (dev only)')
   download.hidden = true
 
-  panel.append(micRow, status, error, labelText, box, use, current, download)
+  speak.append(micRow, status, error)
+  write.append(labelText, box, use, current, download)
+  panel.append(speak, write)
   container.append(panel)
 
   // ---- Logic ----

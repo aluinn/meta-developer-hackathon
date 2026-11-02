@@ -615,9 +615,16 @@ p:focus {
   color: #d92d20;
 }
 
+.rec-indicator {
+  flex-wrap: wrap;
+  row-gap: 0;
+}
+
 .rec-timer {
+  flex-basis: 100%; /* the clock sits on its own line under "Recording" */
   color: var(--text);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .rec-dot {
@@ -683,8 +690,8 @@ p:focus {
   cursor: default;
 }
 
-/* Short screens (phone held sideways): the panel takes the place of the 3D view. */
-@media (max-height: 500px) {
+/* On a phone (narrow or short screen) the panel takes the place of the 3D view: press Layout again to go back. */
+@media (max-width: 700px), (max-height: 500px) {
   .layout-open .view-area {
     display: none;
   }
@@ -692,5 +699,46 @@ p:focus {
   .layout-box {
     flex: 1;
     max-height: none;
+  }
+}
+
+/* Wide enough: mic on the left, text box on the right. */
+.layout-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+@media (min-width: 640px) {
+  .layout-panel {
+    flex-direction: row;
+    gap: 1.5rem;
+  }
+
+  .layout-speak {
+    flex: 0 0 38%;
+  }
+
+  .layout-write {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .layout-label {
+    margin-top: 0;
+  }
+}
+
+@media (max-height: 500px) {
+  .layout-box {
+    padding: 0.6rem 1rem;
+  }
+
+  .layout-hint {
+    display: none;
+  }
+
+  .mic-row {
+    margin: 0.4rem 0;
   }
 }
