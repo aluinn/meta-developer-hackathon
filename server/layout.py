@@ -20,6 +20,9 @@ class LayoutRequest(BaseModel):
     scan_id: str = Field(pattern=r"^[0-9a-f]{32}$")
     goal: str = Field(min_length=3, max_length=500, description='e.g. "put the table next to the sofa, keep the path to the door clear"')
     world: dict | None = Field(default=None, description="The current world.json. If omitted, the scan's saved world.json is used.")
+    min_clearance_m: float | None = Field(
+        default=None, ge=0.3, le=1.5, description="Optional: the narrowest the route from spawn to goal may be, in metres (e.g. 0.9 for a wheelchair). A proposal that squeezes it further is refused."
+    )
 
 
 def make_proposer():
@@ -45,7 +48,7 @@ async def layout(req: LayoutRequest) -> dict:
     except MissingApiKey as exc:
         raise HTTPException(503, str(exc)) from exc
     try:
-        result = await propose_layout(world, req.goal, proposer)
+        result = await propose_layout(world, req.goal, proposer, req.min_clearance_m)
     except LayoutRejected as exc:
         raise HTTPException(422, {"message": "Muse Spark's layout was rejected twice; nothing was changed.", "problems": exc.problems}) from exc
 
@@ -57,6 +60,9 @@ async def layout(req: LayoutRequest) -> dict:
         "notes": result.notes,
         "attempts": result.attempts,
         "spawn_to_goal_walkable": {"before": spawn_to_goal_walkable(world), "after": spawn_to_goal_walkable(result.world)},
+        # widest person who could walk spawn -> goal, in metres (capped at 1.2); null unless min_clearance_m was given
+        "clearance_before_m": result.clearance_before_m,
+        "clearance_after_m": result.clearance_after_m,
     }
     if scan_dir.is_dir():
         (scan_dir / "layout.json").write_text(json.dumps(response, indent=2))  # latest proposal, for the before/after render (A5)
