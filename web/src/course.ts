@@ -77,8 +77,11 @@ export function generateCourse(g: Graph, spawn: Vec3, o: CourseOptions): Course 
   // ---- checkpoints: one up on furniture if possible, the rest spread out (farthest-point sampling) ----
   const chosen: NodeId[] = []
   const farFromAll = (n: NodeId) => Math.min(dist(g, n, start), ...chosen.map((c) => dist(g, n, c)))
-  const raised = reachable.filter((n) => isUp(n) && fromStart.cost[n] >= spread * 0.25 && !chosen.some((c) => flat(g, n, c) < minSep))
-  if (raised.length > 0 && o.checkpoints >= 3) {
+  // Parkour: up to two gates sit on top of furniture (when something can be climbed), well apart from each other.
+  const wantRaised = o.checkpoints >= 3 ? Math.min(2, Math.floor(o.checkpoints / 2)) : 0
+  for (let k = 0; k < wantRaised; k++) {
+    const raised = reachable.filter((n) => isUp(n) && fromStart.cost[n] >= spread * 0.2 && !chosen.some((c) => flat(g, n, c) < minSep))
+    if (raised.length === 0) break
     raised.sort((a, b) => fromStart.cost[b] - fromStart.cost[a])
     chosen.push(raised[Math.floor(rng() * Math.min(raised.length, Math.max(1, Math.ceil(raised.length * 0.3))))])
   }
@@ -86,7 +89,7 @@ export function generateCourse(g: Graph, spawn: Vec3, o: CourseOptions): Course 
     let best: NodeId | null = null
     let bestD = 0
     for (const n of reachable) {
-      if (isUp(n) && chosen.some((c) => isUp(c))) continue // one raised gate is enough
+      if (isUp(n) && chosen.filter((c) => isUp(c)).length >= wantRaised) continue // the raised gates are already chosen
       const d = farFromAll(n)
       if (d > bestD && d >= minSep && fromStart.cost[n] >= g.cell * 4) {
         bestD = d
@@ -161,8 +164,10 @@ export function generateCourse(g: Graph, spawn: Vec3, o: CourseOptions): Course 
     items.push({ node: n, pos: pos(g, n) })
     return true
   }
-  const reward = reachable.filter((n) => isUp(n) && free(n, g.cell * 3))
-  if (reward.length > 0) tryItem(reward[Math.floor(rng() * reward.length)])
+  for (let k = 0; k < 2; k++) { // rewards for climbing: up to two boxes on top of furniture
+    const reward = reachable.filter((n) => isUp(n) && free(n, g.cell * 3) && !items.some((it) => flat(g, n, it.node) < minSep))
+    if (reward.length > 0) tryItem(reward[Math.floor(rng() * reward.length)])
+  }
   for (let attempt = 0; attempt < 60 && items.length < wanted; attempt++) {
     const leg = legs[attempt % legs.length]
     if (leg.length < 6) continue

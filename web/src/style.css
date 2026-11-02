@@ -766,3 +766,24 @@ p:focus {
   .item-btn { right: calc(var(--edge-right) + 6.2rem); width: 4.2rem; height: 4.2rem; }
   .race-countdown { font-size: 3.5rem; }
 }
+
+/* ---- Lives ---- */
+
+.race-lives {
+  position: absolute;
+  top: calc(var(--edge-top) + 0.4rem);
+  right: var(--edge-right);
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(20, 24, 34, 0.75);
+  color: #f87171;
+  font-size: 1.25rem;
+  letter-spacing: 0.15rem;
+  line-height: 1.2;
+}
+
+.race-lives.hurt { animation: race-shake 0.4s; }
+.chip-heart { background: #fca5a5; }
+.item-btn[data-item='heart'] { background: #fca5a5; }
+
+@keyframes race-shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }

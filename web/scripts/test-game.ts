@@ -82,6 +82,7 @@ const counts: Record<string, number> = {}
 for (let i = 0; i < 300; i++) {
   const g = makeGame(i + 1)
   startRunning(g)
+  g.lives = 1 // Extra life is only handed out when you are hurt
   g.invulnerable = 99
   g.update(DT, g.items[0].pos)
   counts[g.held ?? 'none'] = (counts[g.held ?? 'none'] ?? 0) + 1
@@ -93,6 +94,7 @@ check(ITEM_KINDS.every((k) => (counts[k] ?? 0) > 10), 'every kind of item should
 for (const kind of ITEM_KINDS) {
   game = makeGame()
   startRunning(game)
+  if (kind === 'heart') game.lives = 1
   game.give(kind)
   events = game.useItem()
   const m = game.modifiers()
@@ -101,7 +103,9 @@ for (const kind of ITEM_KINDS) {
   if (kind === 'spring') check(m.jumpSpeedMult === TUNING.springJump, 'super jump: jumps higher')
   if (kind === 'wings') check(m.flying, 'wings: flying')
   if (kind === 'shield') check(game.effects.shield > 10, 'shield: protects')
+  if (kind === 'heart') check(game.lives === 2, 'extra life: gives a life back')
   if (kind === 'freeze') check(game.flag.tired >= 3.9 && game.flag.frozen, 'freeze: the flag is frozen')
+  if (kind === 'heart') continue // nothing to wear off
   const lasts = run(game, 20, FAR_FROM_EVERYTHING, true)
   check(kinds(lasts, 'effectEnd').some((e) => e.type === 'effectEnd' && e.kind === kind) || kind === 'freeze', `${kind}: wears off`)
   check(game.modifiers().speedMult === 1 && !game.modifiers().flying && game.modifiers().jumpSpeedMult === 1, `${kind}: back to normal afterwards`)
@@ -132,8 +136,8 @@ game = makeGame()
 startRunning(game)
 let t0 = game.timeLeft
 events = game.update(DT, [game.hazards[0].pos[0], 0, game.hazards[0].pos[2]])
-check(kinds(events, 'hit').length === 1 && game.stun > 0.9 && game.hits === 1 && !game.modifiers().canMove, 'a hazard hit stuns you')
-check(game.timeLeft < t0 - TUNING.hitPenalty + 0.1, `a hit costs ${TUNING.hitPenalty} seconds`)
+check(kinds(events, 'hit').length === 1 && game.stun > 0.7 && game.hits === 1 && !game.modifiers().canMove, 'a hazard hit stuns you')
+check(game.lives === TUNING.lives - 1 && game.timeLeft > t0 - 0.1, 'a hit costs a life, not time')
 events = game.update(DT, [game.hazards[0].pos[0], 0, game.hazards[0].pos[2]])
 check(kinds(events, 'hit').length === 0, 'right after a hit you are safe for a moment')
 run(game, TUNING.stunSeconds + 0.1, FAR_FROM_EVERYTHING, false)
@@ -149,6 +153,38 @@ game = makeGame()
 startRunning(game)
 events = game.update(DT, [game.hazards[0].pos[0], game.hazards[0].def.radius * 2 + 0.02, game.hazards[0].pos[2]])
 check(kinds(events, 'hit').length === 0, 'you can jump over a hazard')
+
+// ---- 6b. lives and falling ----
+game = makeGame()
+startRunning(game)
+check(game.lives === 3, 'you start with 3 lives')
+const hz = () => [game.hazards[0].pos[0], 0, game.hazards[0].pos[2]] as Vec3
+for (let i = 0; i < 3; i++) {
+  game.invulnerable = 0
+  events = game.update(DT, hz())
+}
+check(game.lives === 0 && game.phase === 'lost' && events.some((e) => e.type === 'lose' && e.reason === 'lives'), 'three hits and you are out of lives')
+game = makeGame()
+startRunning(game)
+events = game.landed(UNIT * TUNING.fallLimit * 0.8)
+check(events.length === 0 && game.lives === 3, 'a small drop is fine')
+events = game.landed(UNIT * TUNING.fallLimit * 1.2)
+check(kinds(events, 'fall').length === 1 && game.lives === 2, 'a long drop costs a life')
+game.give('shield')
+game.useItem()
+game.invulnerable = 0
+events = game.landed(UNIT * 5)
+check(events.some((e) => e.type === 'fall' && e.blocked) && game.lives === 2 && game.effects.shield === 0, 'a shield breaks one fall')
+game.give('wings')
+game.useItem()
+game.invulnerable = 0
+events = game.landed(UNIT * 5)
+check(events.length === 0 && game.lives === 2, 'wings stop falls from hurting')
+game = makeGame()
+startRunning(game)
+check(kinds((game.give('heart'), game.useItem()), 'livesFull').length === 1 && game.held === 'heart', 'an extra life is kept when you are on full lives')
+events = game.fellOut()
+check(game.lives === 2, 'falling out of the world costs a life')
 
 // ---- 7. the flag ----
 game = makeGame()

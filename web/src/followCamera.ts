@@ -15,8 +15,9 @@ export const CAMERA = {
   pitch: 0.35, // how high above the character the camera starts, in radians (0 = level, 1.57 = straight down)
 }
 const DRAG_SPEED = 0.005 // radians per pixel dragged
-const MIN_PITCH = 0.05
-const MAX_PITCH = 1.2 // highest you can drag to
+const MIN_PITCH = -0.75 // below zero the camera sits under the character's head, so you look UP at it
+const MAX_PITCH = 1.35 // highest you can go (looking almost straight down)
+const LOOK_UP_BELOW = 0.12 // at or below this the player chose a low view, so don't lift the camera automatically
 const MAX_AUTO_PITCH = 1.45 // in tight corners the camera may rise this high (almost straight down)
 const FOLLOW_RATE = 2 // how quickly it swings behind you while running
 const MANUAL_PAUSE = 1.5 // seconds of no auto-swing after you drag the view
@@ -36,6 +37,8 @@ export interface FollowCamera {
    * `runningAway` 0..1 how much it is running away from the camera (only then do we swing behind),
    * `clearDistance(from, dir, max)` how far the camera can go before hitting something.
    */
+  /** Turn the automatic swing-behind-you on or off (off while the mouse is steering the view). */
+  setAutoSwing: (on: boolean) => void
   update: (
     dt: number,
     feet: THREE.Vector3,
@@ -53,6 +56,7 @@ export function createFollowCamera(camera: THREE.PerspectiveCamera): FollowCamer
   let usedPitch: number = CAMERA.pitch // the angle actually used: higher than `pitch` when there's no room behind
   let distance = CAMERA.distance
   let manualTimer = 0
+  let autoSwing = true
   const target = new THREE.Vector3()
   const dir = new THREE.Vector3()
 
@@ -68,6 +72,9 @@ export function createFollowCamera(camera: THREE.PerspectiveCamera): FollowCamer
 
   return {
     yaw: () => yaw,
+    setAutoSwing: (on) => {
+      autoSwing = on
+    },
     reset: (feet, facing) => {
       yaw = facing + Math.PI // behind = opposite the way it faces
       pitch = CAMERA.pitch
@@ -86,7 +93,7 @@ export function createFollowCamera(camera: THREE.PerspectiveCamera): FollowCamer
       manualTimer = Math.max(0, manualTimer - dt)
 
       // Auto-swing behind the character while it runs away from us.
-      if (manualTimer === 0 && runningAway > 0) {
+      if (autoSwing && manualTimer === 0 && runningAway > 0) {
         yaw += angleDiff(yaw, facing + Math.PI) * Math.min(1, FOLLOW_RATE * runningAway * dt)
       }
 
@@ -97,7 +104,8 @@ export function createFollowCamera(camera: THREE.PerspectiveCamera): FollowCamer
       // Find the lowest angle (starting from yours) with enough room behind the character.
       let bestPitch = pitch
       let bestClear = 0
-      for (let p = pitch; p <= MAX_AUTO_PITCH + 1e-6; p += 0.1) {
+      // A low view (looking up) is the player's choice: only lift the camera when it is a normal or high view.
+      for (let p = pitch; pitch > LOOK_UP_BELOW && p <= MAX_AUTO_PITCH + 1e-6; p += 0.1) {
         const c = clearDistance(target, setDir(p), CAMERA.distance)
         if (c > bestClear) {
           bestClear = c
