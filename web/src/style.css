@@ -1,12 +1,550 @@
+/* Plain CSS, phone first. Wider screens are handled at the bottom. */
+
+:root {
+  --bg: #f6f7fb;
+  --panel: #ffffff;
+  --text: #1b1f2a;
+  --muted: #5b6272;
+  --accent: #3b5bdb;
+  --accent-text: #ffffff;
+  --border: #d5d9e4;
+  --error: #b42318;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12141b;
+    --panel: #1c1f2a;
+    --text: #eef0f6;
+    --muted: #a3a9ba;
+    --accent: #7f9bff;
+    --accent-text: #0d1020;
+    --border: #353a4a;
+    --error: #ff8a80;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 html,
 body {
   margin: 0;
-  height: 100%;
-  font-family: system-ui, sans-serif;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 18px;
+  line-height: 1.4;
+  overflow-x: hidden;
+  overscroll-behavior: none; /* no rubber-band / pull-to-refresh while dragging the 3D view */
 }
 
+h1 {
+  margin: 0 0 0.5rem;
+  font-size: 1.9rem;
+  line-height: 1.15;
+}
+
+p {
+  margin: 0;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+h1:focus,
+p:focus {
+  outline: none;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---- Screens ---- */
+
 #app {
-  min-height: 100%;
+  min-height: 100dvh;
+}
+
+.screen {
+  min-height: 100dvh;
+  /* env() keeps content clear of the iPhone notch, rounded corners and home bar. */
+  padding: max(1.25rem, env(safe-area-inset-top)) max(1.25rem, env(safe-area-inset-right))
+    max(1.25rem, env(safe-area-inset-bottom)) max(1.25rem, env(safe-area-inset-left));
+}
+
+.screen-centered {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 1rem;
+  width: 100%;
+  max-width: 28rem;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.lead {
+  color: var(--muted);
+  font-size: 1.1rem;
+}
+
+.or {
+  color: var(--muted);
+}
+
+.file-info {
+  overflow-wrap: anywhere;
+}
+
+.error {
+  color: var(--error);
+  overflow-wrap: anywhere;
+}
+
+.file-info:empty,
+.error:empty {
+  display: none;
+}
+
+/* ---- Buttons (min 56px tall: easy to tap) ---- */
+
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3.5rem;
+  padding: 0.75rem 1.25rem;
+  border: 2px solid var(--accent);
+  border-radius: 0.9rem;
+  font: inherit;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--accent);
+}
+
+.btn-small {
+  min-height: 2.75rem;
+  padding: 0.5rem 1rem;
+  background: transparent;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+/* ---- Loading ---- */
+
+.spinner {
+  width: 3.5rem;
+  height: 3.5rem;
+  margin: 0 auto;
+  border: 0.4rem solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 3s;
+  }
+}
+
+/* ---- Results ---- */
+
+.screen-results {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  height: 100dvh;
+  max-width: 70rem;
+  margin: 0 auto;
+}
+
+.results-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.results-header h1 {
+  font-size: 1.5rem;
+  margin-bottom: 0.1rem;
+}
+
+.results-detail {
+  color: var(--muted);
+}
+
+.view-area {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border: 2px solid var(--border);
+  border-radius: 1rem;
+  background: var(--panel);
+}
+
+/* The 3D canvas fills the view area. touch-action: none means finger drags rotate
+   the room instead of scrolling or zooming the page. */
+.view-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.legend {
+  position: absolute;
+  left: 0.5rem;
+  bottom: 0.5rem;
+  margin: 0;
+  padding: 0.4rem 0.6rem;
+  list-style: none;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  opacity: 0.92;
+  pointer-events: none; /* touches go through to the 3D view */
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.swatch {
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 0.2rem;
+  border: 1px solid var(--text);
+  flex-shrink: 0;
+}
+
+.tabbar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  padding: 0.35rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+}
+
+.tab {
+  min-height: 3.5rem;
+  border: 0;
+  border-radius: 0.75rem;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tab[aria-selected='true'] {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+/* ---- Laptop and larger ---- */
+
+@media (min-width: 700px) {
+  h1 {
+    font-size: 2.4rem;
+  }
+
+  .screen-results {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+  }
+
+  .tabbar {
+    align-self: center;
+    width: 22rem;
+  }
+}
+
+/* ---- Short screens (phone held sideways): give the 3D view the room ---- */
+
+@media (max-height: 500px) {
+  .screen-results {
+    gap: 0.5rem;
+    padding-top: max(0.5rem, env(safe-area-inset-top));
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+
+  .results-header h1 {
+    font-size: 1.1rem;
+    margin: 0;
+  }
+
+  .results-detail {
+    display: none;
+  }
+
+  .results-header .btn-small {
+    min-height: 2.5rem;
+  }
+
+  .tabbar {
+    align-self: center;
+    width: 16rem;
+    padding: 0.2rem;
+  }
+
+  .tab {
+    min-height: 2.5rem;
+  }
+
+  .legend {
+    display: grid;
+    grid-template-columns: repeat(3, auto);
+    column-gap: 0.8rem;
+    font-size: 0.65rem;
+    line-height: 1.3;
+  }
+}
+
+/* ---- Messages over the 3D view ---- */
+
+.view-message {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 85%;
+  padding: 0.6rem 1rem;
+  border-radius: 0.6rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  text-align: center;
+  pointer-events: none;
+}
+
+.view-message:empty {
+  display: none;
+}
+
+/* ---- Play mode: the 3D view fills the whole screen ---- */
+
+.screen-results.playing {
+  padding: 0;
+  gap: 0;
+  max-width: none;
+}
+
+.screen-results.playing .results-header,
+.screen-results.playing .tabbar,
+.screen-results.playing .legend {
+  display: none;
+}
+
+.screen-results.playing .view-area {
+  border: 0;
+  border-radius: 0;
+}
+
+/* Nothing in play mode can be selected, long-pressed or used to scroll/zoom the page. */
+.screen-results.playing,
+.play-hud {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
+}
+
+.play-hud {
+  /* Distance from each edge, kept clear of the notch, rounded corners and home bar. */
+  --edge-top: max(0.75rem, env(safe-area-inset-top));
+  --edge-right: max(0.75rem, env(safe-area-inset-right));
+  --edge-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  --edge-left: max(0.75rem, env(safe-area-inset-left));
+  position: absolute;
+  inset: 0;
+  pointer-events: none; /* only the buttons below catch touches; the rest goes to the 3D view */
+}
+
+.play-hud .btn,
+.stick,
+.jump-btn {
+  pointer-events: auto;
+}
+
+.hud-back {
+  position: absolute;
+  top: var(--edge-top);
+  left: var(--edge-left);
+  background: var(--panel);
+}
+
+.hud-timer,
+.hud-fps {
+  position: absolute;
+  top: var(--edge-top);
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  background: rgba(20, 24, 34, 0.75);
+  color: #ffffff;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.hud-timer {
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 0.4rem;
+}
+
+.hud-fps {
+  right: var(--edge-right);
+  margin-top: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.hud-hint {
+  position: absolute;
+  bottom: var(--edge-bottom);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 90%;
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  background: rgba(20, 24, 34, 0.75);
+  color: #ffffff;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.hud-win {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(20rem, 85%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.5rem;
+  border-radius: 1rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  text-align: center;
+  pointer-events: auto;
+}
+
+.hud-win h2 {
+  margin: 0;
+  font-size: 1.6rem;
+}
+
+/* ---- Touch controls ---- */
+
+.stick {
+  position: absolute;
+  left: calc(var(--edge-left) + 0.5rem);
+  bottom: calc(var(--edge-bottom) + 0.5rem);
+  width: 8rem;
+  height: 8rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  border: 2px solid rgba(255, 255, 255, 0.45);
   display: grid;
   place-items: center;
+  touch-action: none;
+}
+
+.stick-knob {
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.jump-btn {
+  position: absolute;
+  right: calc(var(--edge-right) + 0.5rem);
+  bottom: calc(var(--edge-bottom) + 1rem);
+  width: 6rem;
+  height: 6rem;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  background: var(--accent);
+  color: var(--accent-text);
+  font: inherit;
+  font-weight: 700;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.jump-btn:active {
+  transform: scale(0.94);
+}
+
+/* Short screens (phone held sideways): slightly smaller controls. */
+@media (max-height: 500px) {
+  .stick {
+    width: 6.5rem;
+    height: 6.5rem;
+  }
+
+  .jump-btn {
+    width: 5rem;
+    height: 5rem;
+  }
 }
