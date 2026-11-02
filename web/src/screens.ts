@@ -14,6 +14,7 @@ export interface ScreenHandlers {
   onUseTestRoom?: () => void
   onStartOver: () => void
   onPlay: () => void
+  onLayout: () => void
   onCharacter: () => void
 }
 
@@ -27,6 +28,10 @@ export interface Screens {
   viewContainer: HTMLElement
   /** Switch the Results screen in or out of full-screen play mode. */
   setPlaying: (playing: boolean) => void
+  /** The empty box under the 3D view where the Layout panel is built. */
+  layoutContainer: HTMLElement
+  /** Show or hide the Layout panel (and mark the Layout tab). */
+  setLayoutOpen: (open: boolean) => void
   /** Show a short message over the 3D view (empty text hides it). */
   setViewMessage: (message: string) => void
 }
@@ -119,7 +124,11 @@ function buildResults(h: ScreenHandlers) {
   message.setAttribute('role', 'status')
   view.append(buildLegend(), message)
 
-  // Play enters play mode. Layout does nothing yet (a later task).
+  // The Layout panel (layoutPanel.ts) is built inside this box. It is hidden until the Layout tab is pressed.
+  const layoutBox = el('div', 'layout-box')
+  layoutBox.hidden = true
+
+  // Play enters play mode. Layout opens the layout panel (press again to close it).
   const tabs = el('div', 'tabbar')
   tabs.setAttribute('role', 'tablist')
   const tabButtons = new Map<TabName, HTMLButtonElement>()
@@ -134,16 +143,21 @@ function buildResults(h: ScreenHandlers) {
   }
   tabs.append(
     makeTab('play', 'Play', h.onPlay),
-    makeTab('layout', 'Layout', () => {}),
+    makeTab('layout', 'Layout', h.onLayout),
     makeTab('character', 'Character', h.onCharacter),
   )
 
-  section.append(header, view, tabs)
+  section.append(header, view, layoutBox, tabs)
   const setPlaying = (playing: boolean) => {
     section.classList.toggle('playing', playing)
     tabButtons.get('play')?.setAttribute('aria-selected', String(playing))
   }
-  return { section, heading, detail, view, message, setPlaying }
+  const setLayoutOpen = (open: boolean) => {
+    layoutBox.hidden = !open
+    section.classList.toggle('layout-open', open)
+    tabButtons.get('layout')?.setAttribute('aria-selected', String(open))
+  }
+  return { section, heading, detail, view, message, setPlaying, layoutBox, setLayoutOpen }
 }
 
 export function createScreens(root: HTMLElement, handlers: ScreenHandlers): Screens {
@@ -178,6 +192,8 @@ export function createScreens(root: HTMLElement, handlers: ScreenHandlers): Scre
     },
     viewContainer: results.view,
     setPlaying: results.setPlaying,
+    layoutContainer: results.layoutBox,
+    setLayoutOpen: results.setLayoutOpen,
     setViewMessage: (text) => {
       results.message.textContent = text
     },
