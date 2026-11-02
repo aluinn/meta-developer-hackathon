@@ -1,8 +1,9 @@
 import './style.css'
 import { createClearancePanel, type ClearancePanel } from './clearancePanel.ts'
 import { setLayoutGoal } from './layoutGoal.ts'
-import { createLayoutPanel, type LayoutPanel } from './layoutPanel.ts'
-import { checkScanFile, processScan } from './api.ts'
+import { createChangeOverlay, type ChangeOverlay } from './changeOverlay.ts'
+import { createLayoutPanel, type LayoutPanel, type ProposalState, type RearrangeHooks } from './layoutPanel.ts'
+import { checkScanFile, layout as askForLayout, processScan, type LayoutResult } from './api.ts'
 import { openCharacterPanel } from './characterPanel.ts'
 import type { PlayMode } from './play.ts'
 import { scanMeshUrl } from './scanMesh.ts'
@@ -19,7 +20,12 @@ function wait(ms: number): Promise<void> {
 }
 
 // The world on the Results screen, and what is showing it: the 3D viewer OR play mode, never both.
-let world: World | null = null
+let world: World | null = null // the room as it is now (in Work mode this can be a layout you chose to keep)
+let originalWorld: World | null = null // the room as it was loaded: Reset goes back to it, and play mode always uses it
+let mode: Mode = 'game'
+let proposal: LayoutResult | null = null // the AI's latest suggestion for `world`, not kept yet (Work mode, Layout tab)
+let showing: 'before' | 'after' = 'before' // which one the 3D view is drawing
+let changeOverlay: ChangeOverlay | null = null // pink outlines and arrows on the objects the proposal moves
 let viewer: Viewer | null = null
 let play: PlayMode | null = null
 let layout: LayoutPanel | null = null // the Layout tab's panel (exists once it has been opened)
@@ -32,6 +38,10 @@ function closeAll(): void {
   session++
   clearance?.dispose() // before the viewer it draws on
   clearance = null
+  changeOverlay?.dispose()
+  changeOverlay = null
+  proposal = null
+  showing = 'before'
   viewer?.dispose()
   viewer = null
   play?.dispose()
@@ -58,13 +68,70 @@ function showViewer(): void {
   }
 }
 
+/** The room the 3D view should be drawing: the proposal while "After" is on, otherwise the current room. */
+function viewedWorld(): World | null {
+  return proposal && showing === 'after' ? proposal.world : world
+}
+
+function proposalState(): ProposalState | null {
+  const changed = world !== originalWorld
+  return proposal || changed ? { result: proposal, showing, canReset: changed, hasScan: world !== null && scanMeshUrl(world) !== null } : null
+}
+
+/** Draw whatever should be on screen now: the room, the scan (only for the room as loaded: it cannot move), the pink changes, the panels. */
+function applyView(): void {
+  const shown = viewedWorld()
+  if (!viewer || !shown) return
+  viewer.setWorld(shown)
+  viewer.setShowScan(shown === originalWorld)
+  screens.setWorkInfo(shown)
+  screens.setViewMessage(shown !== originalWorld && scanMeshUrl(shown) ? 'The scan picture is hidden while the layout is changed: the scan itself cannot move. The boxes show the new arrangement.' : '')
+  changeOverlay ??= createChangeOverlay(viewer)
+  if (proposal) changeOverlay.show(proposal.changes, proposal.world.objects, showing)
+  else changeOverlay.show([], [], 'before')
+  clearance?.setWorld(shown)
+  layout?.setProposal(proposalState())
+}
+
+const rearrangeHooks: RearrangeHooks = {
+  request: async (goal) => {
+    const base = world
+    if (!base) throw new Error('No room loaded')
+    const mySession = session
+    const result = await askForLayout(goal, base)
+    if (mySession !== session || world !== base) return result // you left or changed the room while the AI was thinking
+    proposal = result
+    showing = result.changes.length > 0 ? 'after' : 'before'
+    applyView()
+    return result
+  },
+  setShowing: (which) => {
+    showing = which
+    applyView()
+  },
+  keep: () => {
+    if (!proposal) return
+    world = proposal.world // Work mode only: play mode uses originalWorld
+    proposal = null
+    showing = 'before'
+    applyView()
+  },
+  reset: () => {
+    world = originalWorld
+    proposal = null
+    showing = 'before'
+    applyView()
+  },
+}
+
 /** The Layout tab opens the panel (voice, then the clearance check); pressing it again closes it. The 3D view stays visible. */
 function toggleLayout(): void {
   if (!world || play) return
   layoutOpen = !layoutOpen
   if (layoutOpen) {
-    layout ??= createLayoutPanel(screens.layoutContainer)
-    if (viewer) clearance ??= createClearancePanel(screens.layoutContainer, viewer, world)
+    layout ??= createLayoutPanel(screens.layoutContainer, mode === 'work' ? rearrangeHooks : undefined)
+    layout.setProposal(proposalState())
+    if (viewer) clearance ??= createClearancePanel(screens.layoutContainer, viewer, viewedWorld() ?? world)
   } else {
     layout?.stopRecording() // closing the panel must not leave the microphone on
   }
@@ -81,7 +148,7 @@ async function enterPlay(): Promise<void> {
   try {
     // Loaded only when needed: the physics engine is big, so the first screens stay quick.
     const { startPlay } = await import('./play.ts')
-    const started = await startPlay(screens.viewContainer, world, showViewer)
+    const started = await startPlay(screens.viewContainer, originalWorld ?? world, showViewer) // always the room as loaded, never a proposed layout
     if (mySession !== session) {
       started.dispose() // you left while it was loading
       return
@@ -96,14 +163,16 @@ async function enterPlay(): Promise<void> {
 }
 
 /** Upload -> Loading (about 1 second) -> Results, for any world loader. */
-async function openWorld(title: string, load: () => Promise<World>, mode: Mode): Promise<void> {
+async function openWorld(title: string, load: () => Promise<World>, nextMode: Mode): Promise<void> {
   closeAll()
-  screens.setMode(mode)
+  mode = nextMode
+  screens.setMode(nextMode)
   screens.setStatus(`Loading ${title.toLowerCase()}…`)
   screens.show('loading')
   try {
     const [loaded] = await Promise.all([load(), wait(1000)])
     world = loaded
+    originalWorld = loaded
     setLayoutGoal('') // a new room, so the old goal no longer applies
     const n = loaded.objects.length
     screens.setResultsSummary(title, `${n} ${n === 1 ? 'object' : 'objects'} found`)

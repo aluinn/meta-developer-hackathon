@@ -1918,3 +1918,19 @@ body[data-mode='work'] .screen-loading .spinner { border-color: rgba(8, 102, 255
 .screen-results[data-mode='work'] .tab[data-tab='play'],
 .screen-results[data-mode='work'] .tab[data-tab='character'] { display: none; }
 .screen-results.playing .layout-box { display: none; }
+
+/* ---- Rearrange (Work mode, Layout tab): the AI's proposal ---- */
+
+.rearrange { margin-top: 0.75rem; }
+.proposal { margin-top: 0.5rem; text-align: left; }
+.proposal-title { margin: 0.5rem 0 0.25rem; font-size: 1rem; }
+.proposal-toggle { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+.proposal-toggle .btn[aria-pressed='true'] { background: var(--accent); color: var(--accent-text); }
+.proposal-changes { margin: 0; padding: 0; list-style: none; }
+.proposal-changes li { display: flex; flex-direction: column; padding: 0.4rem 0; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+.proposal-changes li span, .proposal-notes, .proposal-walk, .proposal-none { color: var(--muted); font-size: 0.85rem; }
+.proposal-notes, .proposal-walk, .proposal-none { margin: 0.4rem 0 0; }
+.proposal-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+.proposal > .btn { margin-top: 0.5rem; }
+.proposal-phone-hint { display: none; margin: 0 0 0.5rem; color: var(--muted); font-size: 0.85rem; }
+@media (max-width: 700px), (max-height: 500px) { .proposal-phone-hint { display: block; } }

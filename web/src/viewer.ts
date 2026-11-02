@@ -12,6 +12,11 @@ export interface Viewer {
   setWorld: (world: World) => void
   /** Load the scanned room (.glb) into the scan layer and turn the boxes into faint overlays on top of it. */
   loadScanMesh: (url: string) => Promise<void>
+  /**
+   * Show or hide the scanned room (the real picture). The scan cannot move, so when the boxes are rearranged it is hidden and the
+   * boxes are drawn solid instead. Does nothing useful until a scan has been loaded.
+   */
+  setShowScan: (show: boolean) => void
   /** An empty group drawn with the room, for extras like the clearance check's route. Kept when the room changes. */
   overlay: THREE.Group
   /** Call `fn(seconds since last frame)` every frame. Returns a function that stops it. */
@@ -95,8 +100,13 @@ export function createViewer(container: HTMLElement, initialWorld: World): Viewe
   })
 
   let disposed = false
+  let scanLoaded = false
   return {
     setWorld,
+    setShowScan: (show) => {
+      stage.scanLayer.visible = show
+      stage.setBoxStyle(show && scanLoaded ? 'overlay' : 'boxes')
+    },
     overlay,
     onFrame: (fn) => {
       frameListeners.add(fn)
@@ -106,7 +116,8 @@ export function createViewer(container: HTMLElement, initialWorld: World): Viewe
       const mesh = await loadScan(url)
       if (disposed) return // you left the screen while it was downloading
       stage.scanLayer.add(mesh)
-      stage.setBoxStyle('overlay')
+      scanLoaded = true
+      stage.setBoxStyle(stage.scanLayer.visible ? 'overlay' : 'boxes')
     },
     dispose: () => {
       disposed = true
