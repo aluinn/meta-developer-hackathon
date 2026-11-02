@@ -1,8 +1,8 @@
 # Architecture
 
 How Room world fits together. Status as of 2026-11-02: **A1 to A6 are built.** Proven on a real scan (a small bathroom, `shared/real_world_01.json`): A1 upload, A2 SAM labelling
-(real SAM call, 29 s) and A3 roles (real Muse Spark call, 8 s). Image generation (the character) is proven too. **Not yet run for real:** `/layout`,
-`/render`, `/transcribe`, `/score` (all tested offline with fakes only).
+(real SAM call, 29 s), A3 roles (real Muse Spark call, 8 s) and A6 `/score`. Image generation (the character) is proven too. **Not yet run for real:** `/layout`,
+`/render`, `/transcribe` (tested offline with fakes only).
 
 ## The big picture
 
@@ -54,7 +54,7 @@ API keys stay on the server (`MODEL_API_KEY` in `.env`, git-ignored). The browse
 | A4 | `POST /transcribe` | browser audio -> transcript | yes (`muse-voice-transcribe-1.0`) | conversion and request format tested; **real call untested** |
 | A4 | `POST /layout` | goal text + world -> new valid `world.json` + a reason per change | yes (`muse-spark-1.3`) | validation/retry tested with a scripted stand-in; **real model untested** |
 | A5 | `POST /render`, `GET /render/{scan_id}/before\|after` | photo + old and new world -> before/after images (Muse Image edit, only moved objects change) | yes (`muse-image-1.0`) | request format, prompt and checks tested with a fake model; **real call untested** |
-| A6 | `GET /score/{scan_id}` | scan-versus-simulation match score (SAM on a render of world.json vs the scan's SAM masks) | yes (`sam-3.1`) | maths and caching tested with a fake SAM; **real SAM untested** |
+| A6 | `GET /score/{scan_id}` | scan-versus-simulation match score (outline of each world box vs SAM's mask of the real object) | no (default method) | proven on the bathroom scan (44%); the SAM-on-render option failed on real data |
 | | `GET /health` | `{"status":"ok"}` | no | |
 
 Interactive docs while the server runs: http://localhost:8000/docs
@@ -121,37 +121,45 @@ and asks `muse-image-1.0` (`POST /v1/images/edits`) to move only those and keep 
 
 ## A6: scan-versus-simulation score
 
-**`GET /score/{scan_id}`** (Z6 can show it on the results screen) returns how well `world.json` reproduces the scanned room:
+**`GET /score/{scan_id}?method=silhouette|sam_on_render&refresh=true`** (Z6 can show it on the results screen) returns how well `world.json`
+reproduces the scanned room:
 ```json
 {
-  "scan_id": "...", "overall_percent": 81.9,
-  "objects": [{"id": "sofa_1", "label": "sofa", "score_percent": 81.9, "views_compared": 4,
-               "per_view": [{"view": 0, "iou": 0.82, "seen_in_scan": true, "seen_in_simulation": true}]}],
-  "unmatched_scan_detections": [{"view": 5, "label": "chair", "pixels": 1200}],
+  "scan_id": "...", "method_name": "silhouette", "overall_percent": 44.2,
+  "objects": [{"id": "toilet_1", "label": "toilet", "score_percent": 37.6, "views_compared": 5,
+               "per_view": [{"view": 3, "iou": 0.321, "seen_in_scan": true, "seen_in_simulation": true}]}],
+  "unmatched_scan_detections": [{"view": 0, "label": "sink", "pixels": 8780}],
   "warnings": [], "method": "...", "cached": false
 }
 ```
-Needs a labelled scan with a `world.json` (A2 and A3 first). The first call runs SAM 64 times (about $0.16) and takes a while; the result is
-saved as `score.json` and served from there until `labels.json` or `world.json` changes, or you pass `?refresh=true`.
+Needs a labelled scan with a `world.json` (A2 and A3 first). The result is saved as `score.json` and served again until `labels.json` or `world.json`
+change, or you pass `?refresh=true` (changing the scoring code does not invalidate the cache, so refresh after code changes).
 
-**Method.** If `world.json` is a faithful copy of the room, a detector should "see" the same things in a picture of it as in the scan.
-1. **Rebuild** the room from `world.json` alone: a floor, four walls, and each object as a box (position, size, `rotation_y`).
-   Boxes are coloured with the scan's own median colour where A2 found that object (so a misplaced object still looks like itself and is
-   penalised instead of hidden), and floor and walls from the scan's floor and wall colours.
-2. **Render** that simulated room from the same 8 cameras A2 used (positions saved in `labels.json`) and run **SAM 3.1** on each view with the same 8 prompts.
-3. **Compare** with the masks A2 saved from the scan (`views/masks.npz`). For each world object and each view where it covers at least 300 pixels, take the SAM
-   instance (of the object's label) that overlaps the object's region most, in the scan and in the simulation, and compute their overlap as
-   **IoU** = intersection / union. If only one side found it, that view scores 0. If neither found it, the view is skipped.
-4. **Per object** = mean IoU over its compared views, as a percentage. **Overall** = mean over scorable objects. Detections with confidence under 0.5 are ignored.
-5. **`unmatched_scan_detections`**: things SAM found in the scan that no object in the world accounts for (for example a sofa missing from `world.json`, or a mislabel).
+**Method.** If `world.json` is a faithful copy of the room, what it draws should line up with what SAM found in the scan.
+1. **Rebuild** the room from `world.json` alone: a floor, four walls, and each object as a box (position, size, `rotation_y`). Boxes get the scan's
+   colour where A2 found that object (so a misplaced object still looks like itself), floor and walls the scan's floor and wall colours.
+2. **Render** it from the same 8 cameras A2 used (positions in `labels.json`).
+3. **Compare** with the masks A2 saved from the scan (`views/masks.npz`). For each world object and each view where it covers at least 300 pixels,
+   take the SAM mask of that label on the scan that overlaps it most and compute **IoU** = intersection / union against the object's side of the render.
+   - A view where SAM saw no object of that label in the scan is skipped (hidden or out of frame: nothing to compare against).
+   - A view where SAM saw one but nowhere near the box counts as a miss (IoU 0).
+4. **Per object** = mean IoU over its compared views, as a percentage. **Overall** = mean over scorable objects. Detections under 0.5 confidence are ignored.
+5. **`unmatched_scan_detections`**: things SAM found in the scan that no world object accounts for (for example a missing object, or a mislabel).
+
+**Two ways to get the simulation side (`method`)**
+- **`silhouette` (default, free):** the box's own outline in the render. Works on real scans.
+- **`sam_on_render` (about $0.16):** run SAM 3.1 on the render of the boxes and compare SAM's masks, as originally planned. **It does not work on a real scan:** on
+  the real bathroom every object scored 0%, because SAM did not recognise plain grey boxes as a toilet or a sink (they were found in the real scan in 5 views each).
+  The method only makes sense if the simulated render looks realistic. It is kept for completeness and for clean synthetic scenes.
 
 **How to read it.**
-- The score measures whether the box world looks the same to SAM as the real room. It is not a measurement of true sizes or positions.
-- It will never be 100% on a real scan: SAM's masks differ from run to run, and boxes cannot match a real sofa's arms or a plant's shape.
-  Read scores relatively (this world vs a layout that moved things; one object vs the rest), not as a grade. In our offline test, with a fake SAM that drops 10% of pixels at random,
-  a faithful world scores about 82%, the same world with one object 1.2 m out of place drops that object to 0%, and a deleted object shows up as unmatched.
-- Thin or small objects (rugs, doors) are judged on few pixels and are noisy. An object that neither run detects is not scored.
-- The simulation is only as good as its colours: a scan without colour gives a warning.
+- The score measures how well a box covers what SAM sees as the real object, not true sizes or positions. A box can never match a toilet exactly, so
+  **real scores are low**: the bathroom's toilet scores about 38% and its sink about 51% (stable across views, so it is a real signal, not noise).
+  Read scores relatively (this world vs a layout that moved things; one object vs the rest), not as a grade out of 100.
+- In the offline test with fake SAM masks (10% of pixels dropped at random), a faithful world scores about 85%, one object moved 1.2 m drops that object to 0%,
+  and a deleted object shows up as unmatched.
+- Thin or small objects (rugs, doors) are judged on few pixels and are noisy. An object SAM never saw in the scan cannot be scored.
+- A scan without colour gives a warning: SAM saw grey renders in A2.
 
 ## Deployment
 `Dockerfile` + `render.yaml` run the server on Render (see `docs/deployment.md` for options, steps and risks).
@@ -159,7 +167,7 @@ Settings: `MODEL_API_KEY` (secret, set in the host's dashboard only), `ALLOWED_O
 optional `SCANS_DIR` (where scans are stored; default `server/scans`). The host's disk is temporary on the free plan, so scans do not survive a restart.
 
 ## Costs (from dev.meta.ai pricing, 2026-11-01)
-SAM 3.1: $2.50 per 1,000 images; one A2 run is 64 requests (8 views x 8 prompts) = about $0.16, and so is each `/score`.
+SAM 3.1: $2.50 per 1,000 images; one A2 run is 64 requests (8 views x 8 prompts) = about $0.16. `/score` is free by default (only `method=sam_on_render` costs the same again).
 Muse Image: $0.01 per generated image (one `/render` call = one image).
 Muse Spark 1.3 (standard): $1.25 / $4.25 per million input / output tokens. Voice Transcribe: $0.18 per hour of audio.
 We use **standard mode**, not `-contributor`, because contributor mode lets Meta train on our data.

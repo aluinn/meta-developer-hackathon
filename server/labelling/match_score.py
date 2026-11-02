@@ -1,10 +1,13 @@
 """A6: scan-versus-simulation match score.
 
-Idea: if world.json is a faithful copy of the scanned room, a detector should "see" the same things in a picture of it as in
-the original scan. So we
-  1. rebuild the room from world.json alone (floor, walls, and every object as a coloured box),
-  2. render it from the same cameras A2 used on the scan and run SAM on those renders with the same prompts,
-  3. compare each object's SAM mask in the simulation with its SAM mask in the scan (the masks A2 saved), as intersection-over-union.
+Idea: if world.json is a faithful copy of the scanned room, what it draws should line up with what SAM found in the scan. So we
+  1. rebuild the room from world.json alone (floor, walls, and every object as a box),
+  2. render it from the same cameras A2 used on the scan,
+  3. compare each object, per view, with the masks SAM produced on the scan (saved by A2), as intersection-over-union (IoU).
+Two ways to get the "simulation" side of the comparison:
+  - "silhouette" (default): the box's own outline in the render. Free (no API calls) and works on real scans.
+  - "sam_on_render": run SAM on the render of the boxes and compare SAM's masks. Costs 64 SAM calls, and on a real scan SAM does not
+    recognise plain boxes as furniture (tested on a real bathroom: every object scored 0%), so it only works on renders that look real.
 Per object: the average IoU over the views where it is clearly visible. Overall: the average over objects.
 Caveats are listed in docs/architecture.md.
 """
@@ -108,7 +111,14 @@ def _iou(a: np.ndarray, b: np.ndarray) -> float:
     return float((a & b).sum() / union) if union else 0.0
 
 
-async def score_scan(scan_dir: Path, segmenter: Segmenter) -> dict:
+METHODS = ("silhouette", "sam_on_render")
+
+
+async def score_scan(scan_dir: Path, segmenter: Segmenter | None = None, method: str = "silhouette") -> dict:
+    if method not in METHODS:
+        raise ValueError(f"method must be one of {METHODS}")
+    if method == "sam_on_render" and segmenter is None:
+        raise ValueError("sam_on_render needs a segmenter (SAM client)")
     labels = json.loads((scan_dir / "labels.json").read_text())
     world = json.loads((scan_dir / "world.json").read_text())
     prompts = labels["prompts"]
@@ -119,9 +129,11 @@ async def score_scan(scan_dir: Path, segmenter: Segmenter) -> dict:
     cameras = {c["view"]: Camera.from_dict(c) for c in labels["cameras"]}
     sim_views = await asyncio.to_thread(lambda: {i: render_view(sim_mesh, sim_colours, cam, i) for i, cam in cameras.items()})
 
-    png = {i: _png(v.rgb) for i, v in sim_views.items()}
-    results = await asyncio.gather(*(segmenter.segment(i, png[i], p) for i in sim_views for p in prompts))
-    sim_masks = _by_view_and_label([d for group in results for d in group])
+    sim_masks: dict[tuple[int, str], list[np.ndarray]] = {}
+    if method == "sam_on_render":
+        png = {i: _png(v.rgb) for i, v in sim_views.items()}
+        results = await asyncio.gather(*(segmenter.segment(i, png[i], p) for i in sim_views for p in prompts))
+        sim_masks = _by_view_and_label([d for group in results for d in group])
 
     objects = []
     for k, obj in enumerate(world["objects"]):
@@ -130,8 +142,14 @@ async def score_scan(scan_dir: Path, segmenter: Segmenter) -> dict:
             region = (view.face_id >= 0) & (owner[np.maximum(view.face_id, 0)] == k)
             if int(region.sum()) < MIN_VISIBLE_PX:
                 continue
-            scan_mask = _best_overlap(scan_masks.get((view_index, obj["label"]), []), region)
-            sim_mask = _best_overlap(sim_masks.get((view_index, obj["label"]), []), region)
+            candidates = scan_masks.get((view_index, obj["label"]), [])
+            scan_mask = _best_overlap(candidates, region)
+            if method == "silhouette":
+                if not candidates:
+                    continue  # SAM saw no such object in the scan from here (hidden, or out of frame): nothing to compare against
+                if scan_mask is None:
+                    scan_mask = max(candidates, key=lambda m: int(m.sum()))  # something like it is there, just not where the box is: a miss
+            sim_mask = region if method == "silhouette" else _best_overlap(sim_masks.get((view_index, obj["label"]), []), region)
             if scan_mask is None and sim_mask is None:
                 continue  # neither saw it here: nothing to compare
             iou = 0.0 if scan_mask is None or sim_mask is None else _iou(scan_mask, sim_mask)
@@ -158,12 +176,17 @@ async def score_scan(scan_dir: Path, segmenter: Segmenter) -> dict:
     scored = [o["score_percent"] for o in objects if o["score_percent"] is not None]
     result = {
         "scan_id": scan_dir.name,
+        "method_name": method,
         "overall_percent": round(float(np.mean(scored)), 1) if scored else None,
         "objects": objects,
         "unmatched_scan_detections": unmatched,
         "warnings": ([] if colour_source != "none" else ["The scan had no colour, so SAM saw grey renders; scores are less meaningful."])
         + ([] if scored else ["No object was visible and detected in enough views to score."]),
-        "method": "SAM masks on renders of world.json compared with SAM masks on the scan, per object, as IoU averaged over views (see docs/architecture.md)",
+        "method": (
+            "each box's outline in a render of world.json compared with SAM's mask of that object on the scan, as IoU averaged over views"
+            if method == "silhouette"
+            else "SAM masks on renders of world.json compared with SAM masks on the scan, per object, as IoU averaged over views"
+        ) + " (see docs/architecture.md)",
     }
     (scan_dir / "score.json").write_text(json.dumps(result, indent=2))
     return result

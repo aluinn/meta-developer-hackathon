@@ -98,8 +98,8 @@ Offline test (no key): `python scripts/test_render_synthetic.py`
 
 ## Score (A6)
 
-`GET /score/{scan_id}`: how well `world.json` matches the scanned room (SAM on a render of the world vs SAM on the scan, per object).
-Costs about $0.16 the first time (64 SAM calls), then served from `score.json`; add `?refresh=true` to recompute.
+`GET /score/{scan_id}`: how well `world.json` matches the scanned room (each world box's outline vs SAM's mask of the real object, per object). Free, no API calls.
+`?method=sam_on_render` (about $0.16) runs SAM on the render of the boxes instead, but SAM does not recognise plain boxes on real scans. The result is saved in `score.json`; add `?refresh=true` to recompute.
 Offline test: `python scripts/test_score_synthetic.py`
 
 ## CORS and deployment
