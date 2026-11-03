@@ -2144,3 +2144,6 @@ body[data-mode='work'] .screen-loading .spinner { border-color: rgba(8, 102, 255
   background: var(--accent);
   color: var(--accent-text);
 }
+
+/* Work mode: a clear way in to the layout panel (voice), the same as the Layout tab. */
+.work-layout-btn { display: block; width: 100%; margin: 0 0 1rem; }

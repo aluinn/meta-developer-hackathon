@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 
 // The API paths served by the Python server (server/). The page calls them with relative addresses like fetch('/scan'),
 // and in development this forwards them to the server on port 8000. (In production the same server serves this page.)
-const API_PATHS = /^\/(scan|world|layout|render|transcribe|score|health)(\/|$)/
+const API_PATHS = /^\/(scan|world|layout|character|render|transcribe|score|health)(\/|$)/
 
 export default defineConfig({
   server: {
