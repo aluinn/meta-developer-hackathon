@@ -199,7 +199,7 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
     })
     if (!course) return
     const game = new Game(course, { unit: CHARACTER.height, runSpeed: MOVE.runSpeed, seed })
-    const scene = createGameScene(game, CHARACTER.height)
+    const scene = createGameScene(game, CHARACTER.height, scanMesh !== null)
     stage.scene.add(scene.group)
     race = { game, scene }
     sceneTime = 0

@@ -13,7 +13,7 @@ export type Mode = 'game' | 'work'
 export interface ScreenHandlers {
   onFileChosen: (file: File, mode: Mode) => void
   onUseExample: (mode: Mode) => void
-  onUseScanExample: (mode: Mode) => void
+  onUseExtraExample: (mode: Mode) => void
   /** Only passed in development builds; adds a "Use test room" button. */
   onUseTestRoom?: () => void
   /** Only passed in development builds; adds a "Use narrow-gap test room" button (for the clearance check). */
@@ -133,13 +133,14 @@ function buildUpload(h: ScreenHandlers) {
       section.dataset.chosen = mode
       h.onUseExample(mode)
     })
-    const scanLink = el('button', 'landing-link', "Try a real scan: Zac's room")
-    scanLink.type = 'button'
-    scanLink.addEventListener('click', () => {
+    // A second ready-made room: a real scan to play in (Game), or the narrow-gap room for the wheelchair check (Work).
+    const extraLink = el('button', 'landing-link', mode === 'game' ? "Try a real scan: Zac's room" : 'Try the narrow-gap room')
+    extraLink.type = 'button'
+    extraLink.addEventListener('click', () => {
       section.dataset.chosen = mode
-      h.onUseScanExample(mode)
+      h.onUseExtraExample(mode)
     })
-    actions.append(button(primary, 'primary', choose(mode)), link, scanLink)
+    actions.append(button(primary, 'primary', choose(mode)), link, extraLink)
     inner.append(tag, heading, blurb, chipRow, actions)
     if (mode === 'work') {
       const cases = el('ul', 'cases')
