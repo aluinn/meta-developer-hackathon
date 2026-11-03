@@ -50,7 +50,7 @@ function wingTexture(): THREE.CanvasTexture {
   return texture
 }
 
-function label(text: string, color: string): THREE.Sprite {
+function label(text: string, color: string, onTop = false): THREE.Sprite {
   const canvas = document.createElement('canvas')
   canvas.width = canvas.height = 128
   const g = canvas.getContext('2d') as CanvasRenderingContext2D
@@ -68,7 +68,9 @@ function label(text: string, color: string): THREE.Sprite {
   g.fillText(text, 64, 70)
   const texture = new THREE.CanvasTexture(canvas)
   texture.colorSpace = THREE.SRGBColorSpace
-  return new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true }))
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: !onTop }))
+  if (onTop) sprite.renderOrder = 6
+  return sprite
 }
 
 const basic = (color: number, opacity = 1, extra: THREE.MeshBasicMaterialParameters = {}) =>
@@ -92,20 +94,28 @@ function floorRing(inner: number, outer: number, color: number, opacity: number)
   return ring
 }
 
-export function createGameScene(game: Game, s: number): GameScene {
+/**
+ * `onTop`: the room is a scan, whose walls and clutter would hide the gates and item boxes, so those are drawn over the room
+ * (they stay visible through furniture, like objective markers in a game). Made-up rooms are clear, so they keep normal depth.
+ */
+export function createGameScene(game: Game, s: number, onTop = false): GameScene {
+  const seen: THREE.MeshBasicMaterialParameters = onTop ? { depthTest: false } : {}
+  const raise = (mesh: THREE.Object3D) => { if (onTop) mesh.renderOrder = 5 }
   const group = new THREE.Group()
   group.name = 'race'
 
   // ---- gates ----
   const gates = game.course.checkpoints.map((cp, i) => {
     const gate = new THREE.Group()
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.62 * s, 0.07 * s, 8, 32), basic(COLOR.gateFuture, 0.5, { side: THREE.DoubleSide }))
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.62 * s, 0.07 * s, 8, 32), basic(COLOR.gateFuture, 0.5, { side: THREE.DoubleSide, ...seen }))
     ring.position.y = 0.7 * s
+    raise(ring)
     const base = floorRing(0.44 * s, 0.58 * s, COLOR.gateFuture, 0.5) // the ring on the floor under the gate: stand inside it to pass
     base.position.y = 0.01 * s
-    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.06 * s, 0.06 * s, 5 * s, 8, 1, true), basic(COLOR.gateNext, 0.3, { side: THREE.DoubleSide, depthWrite: false }))
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.06 * s, 0.06 * s, 5 * s, 8, 1, true), basic(COLOR.gateNext, 0.3, { side: THREE.DoubleSide, depthWrite: false, ...seen }))
     beam.position.y = 2.5 * s
-    const number = label(String(i + 1), '#22d3ee')
+    raise(beam)
+    const number = label(String(i + 1), '#22d3ee', onTop)
     number.scale.setScalar(0.55 * s)
     number.position.y = 1.65 * s
     gate.add(ring, base, beam, number)
@@ -121,10 +131,11 @@ export function createGameScene(game: Game, s: number): GameScene {
   // ---- item boxes ----
   const boxes = game.items.map((box) => {
     const holder = new THREE.Group()
-    const cube = new THREE.Mesh(new THREE.BoxGeometry(0.4 * s, 0.4 * s, 0.4 * s), basic(COLOR.item, 0.9))
+    const cube = new THREE.Mesh(new THREE.BoxGeometry(0.4 * s, 0.4 * s, 0.4 * s), basic(COLOR.item, 0.9, seen))
+    raise(cube)
     const ground = shadowDisc(0.3 * s)
     const groundRing = floorRing(0.32 * s, 0.4 * s, COLOR.item, 0.55)
-    const mark = label('?', '#fbbf24')
+    const mark = label('?', '#fbbf24', onTop)
     mark.scale.setScalar(0.42 * s)
     mark.position.y = 0.5 * s // above the cube, where it can be seen
     holder.add(cube, mark)

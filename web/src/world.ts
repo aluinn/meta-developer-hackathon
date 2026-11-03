@@ -121,3 +121,10 @@ export async function loadZacRoomWorld(): Promise<World> {
   if (!res.ok) throw new Error(`The example scan could not be loaded (${res.status}).`)
   return parseWorld(await res.json())
 }
+
+/** A studio apartment: a real phone scan, already labelled by the server, that ships with the website (web/public/examples/studio-apartment). */
+export async function loadStudioWorld(): Promise<World> {
+  const res = await fetch('/examples/studio-apartment/world.json')
+  if (!res.ok) throw new Error(`The example scan could not be loaded (${res.status}).`)
+  return parseWorld(await res.json())
+}

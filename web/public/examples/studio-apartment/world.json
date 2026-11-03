@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "source_scan": "examples/studio-apartment/scan.glb",
+  "room": {
+    "bounds": {
+      "min": [
+        -2.06,
+        -1.7,
+        -3.687
+      ],
+      "max": [
+        2.061,
+        1.7,
+        3.686
+      ]
+    },
+    "floor_y": -1.358
+  },
+  "objects": [
+    {
+      "id": "sofa_1",
+      "label": "sofa",
+      "role": "climbable",
+      "confidence": 0.915,
+      "position": [
+        -0.813,
+        -0.908,
+        -0.855
+      ],
+      "size": [
+        1.064,
+        0.887,
+        1.522
+      ],
+      "rotation_y": 0.0
+    },
+    {
+      "id": "plant_1",
+      "label": "plant",
+      "role": "movable",
+      "confidence": 0.75,
+      "position": [
+        -0.853,
+        -0.292,
+        0.428
+      ],
+      "size": [
+        1.05,
+        1.189,
+        1.445
+      ],
+      "rotation_y": 0.0
+    }
+  ],
+  "spawn": [
+    -1.76,
+    -1.358,
+    -3.387
+  ],
+  "goal": [
+    1.74,
+    -1.358,
+    3.313
+  ]
+}
