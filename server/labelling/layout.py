@@ -16,6 +16,7 @@ from jsonschema import validate
 from openai import AsyncOpenAI
 from scipy import ndimage
 
+from .clearance import clearance_problem, route_width
 from .geometry import footprints_overlap, half_extents
 from .roles import MODEL
 from .sam import BASE_URL, MissingApiKey
@@ -197,6 +198,8 @@ class LayoutResult:
     changes: list[dict]
     notes: str
     attempts: int
+    clearance_before_m: float | None = None  # widest person who could walk spawn -> goal; only worked out when min_clearance_m was asked for
+    clearance_after_m: float | None = None
 
 
 class LayoutRejected(Exception):
@@ -205,12 +208,22 @@ class LayoutRejected(Exception):
         self.problems = problems
 
 
-async def propose_layout(world: dict, goal: str, proposer: LayoutProposer) -> LayoutResult:
-    """Ask for a proposal, check it, and on failure retry once with the problems as feedback."""
+async def propose_layout(world: dict, goal: str, proposer: LayoutProposer, min_clearance_m: float | None = None) -> LayoutResult:
+    """Ask for a proposal, check it, and on failure retry once with the problems as feedback.
+
+    If `min_clearance_m` is given, a proposal whose best route from spawn to goal is narrower than that is also refused (the problem
+    is passed back to the model in plain words).
+    """
     problems: list[str] | None = None
+    before = route_width(world) if min_clearance_m is not None else None
     for attempt in (1, 2):
         proposal = await proposer.propose(world, goal, problems)
         problems = validate_moves(world, proposal.moves)
+        after = None
+        if not problems and min_clearance_m is not None:
+            after = route_width(apply_moves(world, proposal.moves))
+            problem = clearance_problem(after, min_clearance_m)
+            problems = [problem] if problem else []
         if not problems:
             new_world = apply_moves(world, proposal.moves)
             old = {o["id"]: o for o in world["objects"]}
@@ -225,5 +238,5 @@ async def propose_layout(world: dict, goal: str, proposer: LayoutProposer) -> La
                 }
                 for m in proposal.moves
             ]
-            return LayoutResult(new_world, changes, proposal.notes, attempt)
+            return LayoutResult(new_world, changes, proposal.notes, attempt, before.width_m if before else None, after.width_m if after else None)
     raise LayoutRejected(problems or [])

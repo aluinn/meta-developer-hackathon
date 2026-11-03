@@ -116,6 +116,8 @@ If `world` is omitted, the scan's saved `world.json` is used. Returns:
 - Only `movable` objects move. Nothing can be added or removed, so "add a desk" returns no changes plus an explanation in `notes`. The room data also has no windows.
 - Errors: 422 if the model's proposal was rejected twice (body lists the problems; nothing changed) or the world is invalid; 503 if the server has no API key.
 - `spawn_to_goal_walkable` is a rough 0.6 m-wide-person check on a 10 cm grid (`null` = could not tell). It is informational. Z4's clearance check is the real one.
+- **Optional `min_clearance_m`** (0.3 to 1.5, e.g. 0.9 for a wheelchair): after the geometry checks, the server also measures the widest person who can walk the best route from `spawn` to `goal` (`server/labelling/clearance.py`: 5 cm grid, widest-path search, the same rules as the website's `clearance.ts` but right to only about 5 to 10 cm, and it reads a little narrow; gaps over 1.2 m are reported as 1.2). A proposal whose route is narrower is refused like any other problem: the model gets one retry with the sentence in plain words ("the route from spawn to goal is only 62 cm wide near x=0.33, z=-1.57, but it must be at least 90 cm wide everywhere."), then 422. The response then also has `clearance_before_m` and `clearance_after_m` (both `null` when `min_clearance_m` was not sent, so the old behaviour is unchanged). The website does not send it yet.
+- Rooms that were not uploaded (the built-in examples) have no scan: the website sends `scan_id` as 32 zeros together with `world`; the server only needs the id to look like one (and only writes `layout.json` when that scan folder exists).
 
 ## A5: before/after images and the character
 

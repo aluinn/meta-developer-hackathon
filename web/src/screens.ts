@@ -15,6 +15,8 @@ export interface ScreenHandlers {
   onUseExample: (mode: Mode) => void
   /** Only passed in development builds; adds a "Use test room" button. */
   onUseTestRoom?: () => void
+  /** Only passed in development builds; adds a "Use narrow-gap test room" button (for the clearance check). */
+  onUseGapTestRoom?: () => void
   onStartOver: () => void
   onPlay: () => void
   onLayout: () => void
@@ -59,7 +61,7 @@ function el<K extends keyof HTMLElementTagNameMap>(
 const USE_CASES: Array<{ title: string; text: string; icon: string }> = [
   { title: 'Architecture', text: 'Measure and label an existing room from a phone scan.', icon: '<path d="M4 26V12l10-7 10 7v14M10 26v-8h8v8M3 26h22" />' },
   { title: 'Real estate', text: 'Turn a viewing into a 3D model you can share.', icon: '<path d="M4 14 14 5l10 9M7 12v14h14V12M12 26v-7h4v7" />' },
-  { title: 'Interior design', text: 'See what is in a space and how big it is. (Layout tools: soon.)', icon: '<path d="M5 18v-5a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v5M3 18h22v5H3zM6 23v3M22 23v3" />' },
+  { title: 'Interior design', text: 'Say what you want and get a new layout, then check a wheelchair or walker can still get through.', icon: '<path d="M5 18v-5a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v5M3 18h22v5H3zM6 23v3M22 23v3" />' },
   { title: 'Facilities & safety', text: 'Check clearances and spot obstacles before you visit.', icon: '<path d="M14 4 3 24h22zM14 11v6M14 20.5v.5" />' },
 ]
 
@@ -183,6 +185,12 @@ function buildUpload(h: ScreenHandlers) {
     test.addEventListener('click', h.onUseTestRoom)
     section.append(test)
   }
+  if (h.onUseGapTestRoom) {
+    const gap = el('button', 'btn btn-small', 'Use narrow-gap test room (dev only)')
+    gap.type = 'button'
+    gap.addEventListener('click', h.onUseGapTestRoom)
+    section.append(gap)
+  }
   return { section, title, fileInfo, error }
 }
 
@@ -250,7 +258,16 @@ function buildResults(h: ScreenHandlers) {
   const body = el('div', 'work-body')
   body.append(view, workPanel)
 
-  section.append(header, body, layoutBox, tabs)
+  // The same as the Layout tab, but where people look first in Work mode (the panel is hidden in Game mode).
+  const layoutButton = el('button', 'btn btn-primary work-layout-btn', 'Change the layout (voice)')
+  layoutButton.type = 'button'
+  layoutButton.setAttribute('aria-expanded', 'false')
+  layoutButton.addEventListener('click', h.onLayout)
+
+  // The honest limits, always visible on the results screen.
+  const limits = el('p', 'results-limits', 'Sizes are estimates from phone LiDAR. This is a planning aid, not a safety assessment.')
+
+  section.append(header, body, layoutBox, tabs, limits)
   const setPlaying = (playing: boolean) => {
     section.classList.toggle('playing', playing)
     tabButtons.get('play')?.setAttribute('aria-selected', String(playing))
@@ -272,12 +289,13 @@ function buildResults(h: ScreenHandlers) {
       list.append(li)
     }
     if (world.objects.length === 0) list.append(el('li', undefined, 'No objects found.'))
-    workPanel.replaceChildren(el('h2', undefined, 'Room details'), size, el('h2', undefined, `Objects (${world.objects.length})`), list)
+    workPanel.replaceChildren(layoutButton, el('h2', undefined, 'Room details'), size, el('h2', undefined, `Objects (${world.objects.length})`), list)
   }
   const setLayoutOpen = (open: boolean) => {
     layoutBox.hidden = !open
     section.classList.toggle('layout-open', open)
     tabButtons.get('layout')?.setAttribute('aria-selected', String(open))
+    layoutButton.setAttribute('aria-expanded', String(open))
   }
   return { section, heading, detail, view, message, setPlaying, setWorkInfo, layoutBox, setLayoutOpen }
 }

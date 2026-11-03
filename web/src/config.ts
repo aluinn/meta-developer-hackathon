@@ -5,4 +5,4 @@
  * false = really call the server (Aluinn's), through the same address as the page.
  * Set this to false once his server is running (with an API key for voice).
  */
-export const USE_FAKE_SERVER = true
+export const USE_FAKE_SERVER = false
