@@ -5,9 +5,11 @@ import * as THREE from 'three'
 import type { World } from './world.ts'
 
 const SCAN_ID = /^([0-9a-f]{32})\//
+const BUILT_IN_SCAN = /^examples\/[a-z0-9-]+\/scan\.glb$/ // a scan that ships with the website (web/public/examples/...)
 
-/** Where the server keeps this world's scan, or null if the world did not come from an uploaded scan (the example rooms). */
+/** Where this world's scan is: on the server (uploaded), or a file that ships with the website; null for the made-up example rooms. */
 export function scanMeshUrl(world: World): string | null {
+  if (BUILT_IN_SCAN.test(world.source_scan)) return `/${world.source_scan}`
   const match = SCAN_ID.exec(world.source_scan)
   return match ? `/scan/${match[1]}/mesh` : null
 }

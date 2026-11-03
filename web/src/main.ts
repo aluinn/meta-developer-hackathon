@@ -10,7 +10,7 @@ import { scanMeshUrl } from './scanMesh.ts'
 import { loadBigExampleWorld } from './bigExample.ts'
 import { createScreens, type Mode } from './screens.ts'
 import { createViewer, type Viewer } from './viewer.ts'
-import { loadClearanceTestWorld, loadTestWorld, type World } from './world.ts'
+import { loadClearanceTestWorld, loadTestWorld, loadZacRoomWorld, type World } from './world.ts'
 
 const root = document.querySelector<HTMLDivElement>('#app')
 if (!root) throw new Error('Missing #app element in index.html')
@@ -142,6 +142,9 @@ const screens = createScreens(root, {
   // Game mode gets a roomier example, because the race needs space to dodge in. Work mode gets the small one with the table and chair
   // moved to leave a 77 cm gap: walking and a walker get through, a wheelchair does not, so the clearance check and the layout agent have something to do.
   onUseExample: (mode) => openWorld('Example room', mode === 'game' ? loadBigExampleWorld : loadClearanceTestWorld, mode),
+
+  // A real phone scan that ships with the website: nothing to upload, no waiting for the server.
+  onUseScanExample: (mode) => openWorld("Zac's room (real scan)", loadZacRoomWorld, mode),
 
   // Development only: the production build leaves this out.
   onUseTestRoom: import.meta.env.DEV ? () => openWorld('Test room', loadTestWorld, 'game') : undefined,

@@ -18,6 +18,7 @@ build/
 # Large scan files
 /scans/
 *.glb
+!web/public/examples/**/*.glb
 *.usdz
 *.obj
 *.ply

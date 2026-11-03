@@ -114,3 +114,10 @@ export async function loadClearanceTestWorld(): Promise<World> {
   const { default: raw } = await import('./clearance_test_world.json?raw')
   return parseWorld(JSON.parse(raw))
 }
+
+/** Zac's room: a real phone scan, already labelled by the server, that ships with the website (web/public/examples/zac-room). */
+export async function loadZacRoomWorld(): Promise<World> {
+  const res = await fetch('/examples/zac-room/world.json')
+  if (!res.ok) throw new Error(`The example scan could not be loaded (${res.status}).`)
+  return parseWorld(await res.json())
+}
