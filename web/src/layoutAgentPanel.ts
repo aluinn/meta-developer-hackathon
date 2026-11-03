@@ -198,13 +198,11 @@ export function createLayoutAgentPanel(
   // ---- Asking for a layout ----
   function refreshAsk(): void {
     const goal = getLayoutGoal()
-    const canAsk = pretend || scanId !== null
-    ask.disabled = asking || goal === '' || !canAsk
+    ask.disabled = asking || goal === ''
     again.disabled = asking
     back.disabled = asking
-    goalLine.textContent = !canAsk
-      ? 'Layout suggestions need a room you scanned and uploaded. The example room is not on the server.'
-      : goal === ''
+    goalLine.textContent =
+      goal === ''
         ? 'First say or type a goal above, then press "Use this goal".'
         : `Goal: ${goal}`
     ask.textContent = proposal ? 'Suggest another layout' : 'Suggest a new layout'

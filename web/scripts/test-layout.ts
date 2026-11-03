@@ -210,7 +210,16 @@ for (const [path, run] of Object.entries(calls)) check(friendly(await messageOf(
 pretend(200, 'not json at all', false)
 for (const [path, run] of Object.entries(calls)) check(friendly(await messageOf(run)), `${path}: a 200 that isn't JSON: "${await messageOf(run)}"`)
 // No scan id (the example rooms), with the real server.
-check(/wasn't scanned/.test(await messageOf(() => getLayout('make room', world, null))), 'a room with no scan id: /layout says why')
+{
+  // /layout still works for a built-in room: the whole room is sent, with a placeholder scan id.
+  let sent = ''
+  globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+    sent = typeof init?.body === 'string' ? init.body : ''
+    return new Response(JSON.stringify({ scan_id: '0'.repeat(32), goal: 'make room', world, changes: [], notes: '', attempts: 1 }), { status: 200 })
+  }) as typeof fetch
+  await getLayout('make room', world, null)
+  check(JSON.parse(sent).scan_id === '0'.repeat(32) && 'world' in JSON.parse(sent), 'a room with no scan id: /layout is sent the room with a placeholder id')
+}
 check(/wasn't scanned/.test(await messageOf(() => getScore(null))), 'a room with no scan id: /score says why')
 check(/wasn't scanned/.test(await messageOf(() => renderBeforeAfter(null, photo, world, world))), 'a room with no scan id: /render says why')
 check(/few letters|goal first/.test(await messageOf(() => getLayout('  ', world, scanId))), 'an empty goal is refused before asking the server')

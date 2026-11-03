@@ -278,6 +278,8 @@ const SCORE_TIMEOUT_MS = 90 * 1000 // the first score for a scan has to render i
 const MAX_PHOTO_BYTES = 15 * 1024 * 1024 // the server's limit
 const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
+/** Sent to /layout for rooms that were not scanned (the examples); the server only needs it to look like an id when the room is sent too. */
+const NO_SCAN_ID = '0'.repeat(32)
 export const NOT_SCANNED =
   "This room wasn't scanned, so the server doesn't know it. Layout suggestions and the match score need a room you scanned and uploaded."
 const SCAN_FORGOTTEN =
@@ -322,7 +324,7 @@ async function readJson(res: Response): Promise<unknown> {
 
 /**
  * Ask the layout agent to rearrange the room for a goal (POST /layout). `scanId` is the scan the room came from (scanIdOf(world));
- * the real server needs one. Only movable objects move. The pretend server works on any room.
+ * a built-in room (no scan) is sent with a placeholder id. Only movable objects move.
  */
 export async function getLayout(goal: string, world: World, scanId: string | null): Promise<LayoutResult> {
   const text = goal.trim()
@@ -331,8 +333,8 @@ export async function getLayout(goal: string, world: World, scanId: string | nul
     await sleep(FAKE_LAYOUT_MS)
     return proposeFakeLayout(world, text)
   }
-  if (!scanId) throw new ApiError(NOT_SCANNED)
-  const body = JSON.stringify({ scan_id: scanId, goal: text, world })
+  // The whole room is sent along, so the server does not need to know the scan: a built-in room gets a placeholder id.
+  const body = JSON.stringify({ scan_id: scanId ?? NO_SCAN_ID, goal: text, world })
   const res = await endpoint('/layout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }, LAYOUT_TIMEOUT_MS, LAYOUT_ERRORS)
   try {
     return parseLayoutResponse(await readJson(res), text)
