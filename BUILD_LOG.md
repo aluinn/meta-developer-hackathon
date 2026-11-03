@@ -24,6 +24,12 @@ Add a new entry at the TOP after each work session. Copy the template.
 - AI tools used (and for what): Claude Code wrote the code and the SVG drawing (our own, nothing downloaded).
 - Next: Play-test; tune ring and shadow sizes if they get in the way.
 
+## 2026-11-03 - Aluinn (demo room: real layout agent on the Work example room)
+- What I did: the Work mode example room is now the small room with the table and chair moved to leave a 77 cm gap (`clearance_test_world.json`, `main.ts`): Walking and Walker get through, a wheelchair is blocked ("Blocked by a 77 cm gap (needs 85 cm)"). The layout agent no longer refuses built-in rooms: `getLayout` sends the whole room with a placeholder scan id (32 zeros), which the server accepts (`api.ts`, `layoutAgentPanel.ts`; `test-layout.ts` updated). Game mode's example room is unchanged.
+- What worked / what didn't: three real `POST /layout` calls on the live server (goal "make room for a wheelchair", no pretend answers, 63 s, 69 s and 101 s): all three moved the coffee table and chair and opened the route at wheelchair width (checked with `checkClearance`: Wheelchair PASS, no gap narrower than 120 cm). After the move the app says "No gaps narrower than 120 cm", not a narrowest-gap number. `GET /score` on Zac's uploaded scan returns 53.5% (bed, curtain); the score only works for an uploaded scan. Zac's scan found only a bed and a curtain; the marketplace LivingRoom found no objects. Not tried: real voice (`/transcribe`) from the browser.
+- AI tools used (and for what): Claude Code.
+- Next: merge, redeploy, film the screen recordings.
+
 ## 2026-11-03 - Aluinn (drag and drop a scan onto the front page)
 - What I did: dropping a .glb or .obj on the Game or Work half of the front page starts the upload in that mode, the same as the button on that half (`screens.ts`, `style.css`: dashed outline while dragging). A file dropped anywhere else on that page no longer makes the browser open it and leave the app. Needed for the demo video's "dragging the file into the app" shot.
 - What worked / what didn't: `tsc` passes; headless Chrome with the server mocked: a dropped .glb on the Work half made the upload request, a dropped .txt showed the normal "file type isn't supported" message, no page errors. Not tried with a real drag from Finder.

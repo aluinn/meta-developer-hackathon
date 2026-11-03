@@ -10,7 +10,7 @@ import { scanMeshUrl } from './scanMesh.ts'
 import { loadBigExampleWorld } from './bigExample.ts'
 import { createScreens, type Mode } from './screens.ts'
 import { createViewer, type Viewer } from './viewer.ts'
-import { loadClearanceTestWorld, loadExampleWorld, loadTestWorld, type World } from './world.ts'
+import { loadClearanceTestWorld, loadTestWorld, type World } from './world.ts'
 
 const root = document.querySelector<HTMLDivElement>('#app')
 if (!root) throw new Error('Missing #app element in index.html')
@@ -139,8 +139,9 @@ const screens = createScreens(root, {
     void openWorld(file.name.replace(/\.[^.]+$/, ''), () => processScan(file, screens.setStatus), mode)
   },
 
-  // Game mode gets a roomier example, because the race needs space to dodge in. Work mode keeps the original small one.
-  onUseExample: (mode) => openWorld('Example room', mode === 'game' ? loadBigExampleWorld : loadExampleWorld, mode),
+  // Game mode gets a roomier example, because the race needs space to dodge in. Work mode gets the small one with the table and chair
+  // moved to leave a 77 cm gap: walking and a walker get through, a wheelchair does not, so the clearance check and the layout agent have something to do.
+  onUseExample: (mode) => openWorld('Example room', mode === 'game' ? loadBigExampleWorld : loadClearanceTestWorld, mode),
 
   // Development only: the production build leaves this out.
   onUseTestRoom: import.meta.env.DEV ? () => openWorld('Test room', loadTestWorld, 'game') : undefined,
