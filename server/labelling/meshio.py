@@ -16,6 +16,12 @@ TEXTURE_BUDGET_PX = 1024 * 1024  # pixels in all of a scan's textures together
 _TEXTURE_ATTRS = ("baseColorTexture", "emissiveTexture", "normalTexture", "occlusionTexture", "metallicRoughnessTexture", "image")
 
 
+def _textures(geometry: trimesh.parent.Geometry) -> list[Image.Image]:
+    material = getattr(getattr(geometry, "visual", None), "material", None)
+    images = [getattr(material, attr, None) for attr in _TEXTURE_ATTRS]
+    return [image for image in images if isinstance(image, Image.Image)]
+
+
 def shrink_textures(geometry: trimesh.parent.Geometry, max_px: int = MAX_TEXTURE_PX) -> None:
     material = getattr(getattr(geometry, "visual", None), "material", None)
     if material is None:
@@ -30,9 +36,11 @@ def load_mesh(path) -> trimesh.Trimesh:
     """Load a .glb/.obj as a single mesh, with textures shrunk. Raises whatever trimesh raises for unreadable files."""
     loaded = trimesh.load(path)
     parts = list(loaded.geometry.values()) if isinstance(loaded, trimesh.Scene) else [loaded]
-    # Merging several textured parts into one mesh packs all their textures together, so share one budget between them:
-    # a scan with three 4096 px textures peaked at 1.1 GB with a flat 2048 px limit each (now about 260 MB).
-    per_part = MAX_TEXTURE_PX if len(parts) <= 1 else max(MIN_TEXTURE_PX, min(MAX_TEXTURE_PX, int(math.sqrt(TEXTURE_BUDGET_PX / len(parts)))))
+    # Several textures (several parts, or one part carrying several pictures) are packed together when the scan is merged and
+    # exported, so they share one budget: a scan with three 4096 px textures peaked at 1.1 GB with a flat 2048 px limit each
+    # (now about 260 MB).
+    count = len({id(image) for geometry in parts for image in _textures(geometry)})
+    per_texture = MAX_TEXTURE_PX if count <= 1 else max(MIN_TEXTURE_PX, min(MAX_TEXTURE_PX, int(math.sqrt(TEXTURE_BUDGET_PX / count))))
     for geometry in parts:
-        shrink_textures(geometry, per_part)
+        shrink_textures(geometry, per_texture)
     return loaded.to_mesh() if isinstance(loaded, trimesh.Scene) else loaded
