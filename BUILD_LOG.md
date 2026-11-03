@@ -24,6 +24,12 @@ Add a new entry at the TOP after each work session. Copy the template.
 - AI tools used (and for what): Claude Code wrote the code and the SVG drawing (our own, nothing downloaded).
 - Next: Play-test; tune ring and shadow sizes if they get in the way.
 
+## 2026-11-03 - Aluinn (drag and drop a scan onto the front page)
+- What I did: dropping a .glb or .obj on the Game or Work half of the front page starts the upload in that mode, the same as the button on that half (`screens.ts`, `style.css`: dashed outline while dragging). A file dropped anywhere else on that page no longer makes the browser open it and leave the app. Needed for the demo video's "dragging the file into the app" shot.
+- What worked / what didn't: `tsc` passes; headless Chrome with the server mocked: a dropped .glb on the Work half made the upload request, a dropped .txt showed the normal "file type isn't supported" message, no page errors. Not tried with a real drag from Finder.
+- AI tools used (and for what): Claude Code.
+- Next: none.
+
 ## 2026-11-03 - Aluinn (fix: Zac's room scan crashed the live server)
 - What I did: uploading `03_11_2026.glb` made the live site answer "server busy", then 503 and a blank page. The scan has three 4096 x 4096 textures; `load_mesh` shrank each to 2048 px but merging them into one mesh packed them together and the preparing step peaked at 1.1 GB, over the 512 MB host. `labelling/meshio.py` now gives all the textures one shared budget, counted per picture, not per mesh part (1024 x 1024 pixels between them, so about 590 px each for three; a scan with one texture is still shrunk to 2048 px as before). A second scan (`LivingRoom.glb`, one mesh carrying three 4096 px textures) showed that counting parts was not enough: 463 MB before counting pictures, 219 MB after. Peak on the real scan: 1139 MB before, 257 MB after (about the 260 MB the architecture doc gives for this step). `server/scripts/test_meshio.py` has a new three-texture case (old code 1062 MB, new 366 MB, limit 400).
 - What worked / what didn't: `test_meshio.py` and the character, jobs, labelling, layout-clearance, layout and render synthetic tests pass; I did not wait for the rest before pushing (time). Not tried: the real labelling step on this scan (it makes real AI calls), so the labels are unchecked. The textures are smaller, so the pictures the AI sees are a bit blurrier.
