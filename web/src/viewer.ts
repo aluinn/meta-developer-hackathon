@@ -8,15 +8,12 @@ import { createStage } from './stage.ts'
 import type { World } from './world.ts'
 
 export interface Viewer {
-  /** Replace the room being shown. The old one is freed and the camera is re-aimed. */
-  setWorld: (world: World) => void
+  /** Replace the room being shown. The old one is freed and the camera is re-aimed (unless `keepCamera`, for flipping between layouts). */
+  setWorld: (world: World, keepCamera?: boolean) => void
+  /** Show only the boxes (hide the scan picture), so moved furniture is easy to see. Pass false to put the scan back. */
+  showBoxesOnly: (on: boolean) => void
   /** Load the scanned room (.glb) into the scan layer and turn the boxes into faint overlays on top of it. */
   loadScanMesh: (url: string) => Promise<void>
-  /**
-   * Show or hide the scanned room (the real picture). The scan cannot move, so when the boxes are rearranged it is hidden and the
-   * boxes are drawn solid instead. Does nothing useful until a scan has been loaded.
-   */
-  setShowScan: (show: boolean) => void
   /** An empty group drawn with the room, for extras like the clearance check's route. Kept when the room changes. */
   overlay: THREE.Group
   /** Call `fn(seconds since last frame)` every frame. Returns a function that stops it. */
@@ -82,11 +79,18 @@ export function createViewer(container: HTMLElement, initialWorld: World): Viewe
     controls.update()
   }
 
-  function setWorld(world: World): void {
+  function setWorld(world: World, keepCamera = false): void {
     currentWorld = world
-    userMovedCamera = false
     stage.setRoom(world)
+    if (keepCamera) return
+    userMovedCamera = false
     frameRoom(world)
+  }
+
+  let scanLoaded = false
+  function showBoxesOnly(on: boolean): void {
+    stage.scanLayer.visible = !on
+    stage.setBoxStyle(on || !scanLoaded ? 'boxes' : 'overlay')
   }
 
   setWorld(initialWorld)
@@ -100,13 +104,9 @@ export function createViewer(container: HTMLElement, initialWorld: World): Viewe
   })
 
   let disposed = false
-  let scanLoaded = false
   return {
     setWorld,
-    setShowScan: (show) => {
-      stage.scanLayer.visible = show
-      stage.setBoxStyle(show && scanLoaded ? 'overlay' : 'boxes')
-    },
+    showBoxesOnly,
     overlay,
     onFrame: (fn) => {
       frameListeners.add(fn)
@@ -117,7 +117,7 @@ export function createViewer(container: HTMLElement, initialWorld: World): Viewe
       if (disposed) return // you left the screen while it was downloading
       stage.scanLayer.add(mesh)
       scanLoaded = true
-      stage.setBoxStyle(stage.scanLayer.visible ? 'overlay' : 'boxes')
+      stage.setBoxStyle('overlay')
     },
     dispose: () => {
       disposed = true

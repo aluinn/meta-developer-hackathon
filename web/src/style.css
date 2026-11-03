@@ -698,8 +698,13 @@ p:focus {
 
 /* Phone held upright (or a narrow window): the 3D view on top, the panel scrolls underneath. */
 @media (max-width: 899px) and (min-height: 501px) {
-  .layout-open .view-area {
-    flex: 0 0 38dvh;
+  .layout-open .work-body {
+    flex: 0 0 34dvh;
+  }
+
+  /* The panel is short on a phone: skip the explanations, keep the buttons and numbers. */
+  .agent-panel > .layout-hint {
+    display: none;
   }
 
   /* The role legend would cover half the smaller view; the clearance check has its own colour key. */
@@ -719,18 +724,24 @@ p:focus {
   .screen-results.layout-open {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(18rem, 26rem);
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
     grid-template-areas:
       'header header'
       'view box'
-      'tabs tabs';
+      'tabs tabs'
+      'limits limits';
+  }
+
+  .layout-open .results-limits {
+    grid-area: limits;
+    justify-self: center;
   }
 
   .layout-open .results-header {
     grid-area: header;
   }
 
-  .layout-open .view-area {
+  .layout-open .work-body {
     grid-area: view;
   }
 
@@ -755,6 +766,11 @@ p:focus {
   .clearance-score {
     font-size: 1rem;
   }
+}
+
+/* Work mode's room details give way to the Layout panel while it is open (there is no room for both next to the 3D view). */
+.screen-results.layout-open .work-panel {
+  display: none !important;
 }
 
 /* The panel's own width decides its layout (it may be a narrow side column on a wide screen). */
@@ -1910,48 +1926,224 @@ body[data-mode='work'] .screen-loading .spinner { border-color: rgba(8, 102, 255
 .half-game .landing-btn-primary, .half-work .landing-btn-primary { text-transform: none; font-style: normal; letter-spacing: 0; animation: none; }
 .half-work .half-bg { opacity: 0.08; }
 
-/* Layout panel with the work-mode wrapper: on phones the panel replaces the whole view row. Work mode keeps only the Layout tab. */
-@media (max-width: 700px), (max-height: 500px) {
-  .layout-open .work-body { display: none; }
-}
+/* Work mode keeps only the Layout tab. (The 3D view stays visible with the Layout panel open: the clearance check and before/after draw on it.) */
 .screen-results[data-mode='work'] .tabbar { display: grid; grid-template-columns: 1fr; width: 12rem; }
 .screen-results[data-mode='work'] .tab[data-tab='play'],
 .screen-results[data-mode='work'] .tab[data-tab='character'] { display: none; }
 .screen-results.playing .layout-box { display: none; }
 
-/* ---- Rearrange (Work mode, Layout tab): the AI's proposal ---- */
 
-.rearrange { margin-top: 0.75rem; }
-.proposal { margin-top: 0.5rem; text-align: left; }
-.proposal-title { margin: 0.5rem 0 0.25rem; font-size: 1rem; }
-.proposal-toggle { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
-.proposal-toggle .btn[aria-pressed='true'] { background: var(--accent); color: var(--accent-text); }
-.proposal-changes { margin: 0; padding: 0; list-style: none; }
-.proposal-changes li { display: flex; flex-direction: column; padding: 0.4rem 0; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
-.proposal-changes li span, .proposal-notes, .proposal-walk, .proposal-none { color: var(--muted); font-size: 0.85rem; }
-.proposal-notes, .proposal-walk, .proposal-none { margin: 0.4rem 0 0; }
-.proposal-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
-.proposal > .btn { margin-top: 0.5rem; }
-.proposal-phone-hint { display: none; margin: 0 0 0.5rem; color: var(--muted); font-size: 0.85rem; }
-@media (max-width: 700px), (max-height: 500px) { .proposal-phone-hint { display: block; } }
+/* ---- Layout agent (Z6): suggest a layout, Before / After, compare ---- */
 
-/* ---- Clearance: PASS / FAIL and Before / After ---- */
-
-.clearance-verdict {
-  margin: 0.5rem 0;
-  padding: 0.6rem 0.8rem;
-  border-left: 0.35rem solid var(--border);
-  border-radius: 0.4rem;
-  background: var(--bg);
-  font-weight: 700;
-  line-height: 1.35;
+.results-limits {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-align: center;
 }
-.clearance-verdict.is-pass { border-left-color: var(--ok); }
-.clearance-verdict.is-fail { border-left-color: var(--bad); }
-.clearance-compare { margin: 0.25rem 0 0.5rem; }
-.clearance-compare-line { margin: 0 0 0.4rem; font-weight: 600; font-variant-numeric: tabular-nums; }
-.clearance-compare .proposal-toggle { margin-bottom: 0; }
-.clearance-compare .proposal-toggle .btn[aria-pressed='true'] { background: var(--accent); color: var(--accent-text); }
+
+.screen-results.playing .results-limits {
+  display: none;
+}
+
+.agent-panel {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.agent-score {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin: 0.75rem 0;
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.6rem;
+  background: var(--bg);
+}
+
+.agent-score-value {
+  flex-shrink: 0;
+  min-width: 3.2rem;
+  font-size: 1.6rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.agent-score-text {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.agent-ask {
+  width: 100%;
+}
+
+.agent-ask:disabled,
+.agent-panel .btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.agent-goal,
+.agent-status,
+.agent-notes {
+  margin: 0.5rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.agent-goal:empty,
+.agent-status:empty,
+.agent-notes:empty {
+  display: none;
+}
+
+.agent-status-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.agent-spinner {
+  flex-shrink: 0;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-top: 0.5rem;
+  border: 0.18rem solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+.agent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0 0.25rem;
+}
+
+.agent-subtitle {
+  margin: 1rem 0 0.4rem;
+  font-size: 1rem;
+}
+
+.agent-changes {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.agent-changes li {
+  margin: 0.3rem 0;
+}
+
+.agent-compare {
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.6rem;
+  background: var(--bg);
+}
+
+.agent-compare-who {
+  font-weight: 700;
+}
+
+.agent-compare-row {
+  margin-top: 0.3rem;
+}
+
+.agent-verdict {
+  margin-top: 0.5rem;
+  padding: 0.35rem 0.6rem;
+  border-left: 0.35rem solid var(--border);
+  font-weight: 700;
+}
+
+.agent-verdict.is-better {
+  border-left-color: var(--ok);
+  color: var(--ok);
+}
+
+.agent-verdict.is-worse {
+  border-left-color: var(--bad);
+  color: var(--bad);
+}
+
+.agent-photo-name {
+  display: block;
+  margin-top: 0.4rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.agent-pictures {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.agent-pictures:empty {
+  display: none;
+}
+
+.agent-picture {
+  margin: 0;
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+.agent-picture img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+}
+
+.agent-warning {
+  margin: 0.5rem 0 0;
+  color: var(--bad);
+  font-size: 0.9rem;
+}
+
+.agent-warning:empty {
+  display: none;
+}
+
+/* The Before / After switch on top of the 3D view. */
+.ba-toggle {
+  position: absolute;
+  top: 0.6rem;
+  left: 50%;
+  z-index: 2;
+  display: flex;
+  transform: translateX(-50%);
+  padding: 0.2rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+
+.ba-btn {
+  min-width: 5rem;
+  min-height: 2.5rem;
+  padding: 0 1rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ba-btn[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--accent-text);
+}
 
 /* Work mode: a clear way in to the layout panel (voice), the same as the Layout tab. */
 .work-layout-btn { display: block; width: 100%; margin: 0 0 1rem; }

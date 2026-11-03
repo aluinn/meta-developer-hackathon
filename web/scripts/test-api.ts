@@ -1,7 +1,6 @@
 // Offline test of src/api.ts with a pretend server (no network, no cost). Run: node scripts/test-api.ts
 import { readFileSync } from 'node:fs'
-import { ApiError, checkScanFile, generateCharacter, layout, layoutErrorMessage, processScan, scanIdOf, setFakeServer, setPollInterval } from '../src/api.ts'
-import { parseWorld } from '../src/world.ts'
+import { ApiError, checkScanFile, generateCharacter, processScan, setPollInterval } from '../src/api.ts'
 
 setPollInterval(0) // do not wait between progress checks in tests
 const exampleWorld = JSON.parse(readFileSync(new URL('../../shared/example_world.json', import.meta.url), 'utf8'))
@@ -164,65 +163,6 @@ for (const [reply, expected] of characterCases) {
   console.log(`  /character -> ${m}`)
   check(m.includes(expected), `/character: expected "${expected}", got "${m}"`)
 }
-
-
-// ---- /layout (the Layout tab's Rearrange) ----
-const room = parseWorld(exampleWorld)
-const moved = JSON.parse(JSON.stringify(exampleWorld))
-moved.objects[2].position = [0.5, 0.2, 0.0] // the coffee table, 0.5 m to the side
-const answer = {
-  scan_id: ID, goal: 'g', world: moved,
-  changes: [{ id: 'table_1', label: 'coffee table', from: { position: [0, 0.2, 0], rotation_y: 0.3 }, to: { position: [0.5, 0.2, 0], rotation_y: 0.3 }, reason: 'Clears the path.' }],
-  notes: 'No window to put things by.', attempts: 2, spawn_to_goal_walkable: { before: false, after: true },
-}
-setFakeServer(false)
-let layoutBody: Record<string, unknown> = {}
-globalThis.fetch = (async (_url: string, init?: RequestInit) => {
-  layoutBody = JSON.parse(String(init?.body))
-  return new Response(JSON.stringify(answer), { status: 200 })
-}) as typeof fetch
-const scanned = { ...room, source_scan: `${ID}/original.glb` }
-const got = await layout('  make room for a wheelchair ', scanned)
-check(layoutBody.scan_id === ID && layoutBody.goal === 'make room for a wheelchair' && JSON.stringify(layoutBody.world).includes(ID), 'layout: sends scan_id (from source_scan), the trimmed goal, and the world')
-check(got.changes.length === 1 && got.changes[0].to.position[0] === 0.5 && got.notes === 'No window to put things by.' && got.attempts === 2, 'layout: changes, notes and attempts come through')
-check(got.spawnToGoalWalkable.before === false && got.spawnToGoalWalkable.after === true && got.world.objects[2].position[0] === 0.5, 'layout: walkable flags and the new world come through')
-await layout('make room', room)
-check(layoutBody.scan_id === '0'.repeat(32), 'layout: a room with no uploaded scan sends a placeholder id')
-check(scanIdOf(scanned) === ID && scanIdOf(room) === '0'.repeat(32), 'scanIdOf works')
-check((await message(layout('hi', room))).includes('what you want'), 'layout: a too-short goal is refused before any call')
-const layoutReplies: Array<[string, number, unknown, RegExp]> = [
-  ['422 rejected', 422, { detail: { message: 'rejected twice', problems: ['x'] } }, /valid arrangement.*nothing was changed/i],
-  ['422 bad world', 422, { detail: 'world does not match' }, /valid arrangement/i],
-  ['503 with a message', 503, { detail: 'MODEL_API_KEY is not set' }, /not set up.*API key/i],
-  ['502 from the AI', 502, { detail: 'upstream' }, /AI service had a problem/i],
-  ['500 from the server', 500, { detail: 'boom' }, /error 500/],
-  ['503 from the hosting layer', 503, 'upstream unavailable', /Couldn't reach the server/],
-  ['200 but nonsense', 200, { hello: 1 }, /wasn't what we expected/],
-]
-for (const [name, status, body, expected] of layoutReplies) {
-  globalThis.fetch = (async () => new Response(typeof body === 'string' ? body : JSON.stringify(body), { status })) as typeof fetch
-  const m = await message(layout('make room for a wheelchair', room))
-  check(expected.test(m), `layout ${name}: got "${m}"`)
-}
-globalThis.fetch = (async () => { throw new TypeError('fetch failed') }) as typeof fetch
-check(/Couldn't reach the server/.test(await message(layout('make room for a wheelchair', room))), 'layout: network failure message')
-globalThis.fetch = (async () => { const e = new Error('aborted'); e.name = 'AbortError'; throw e }) as typeof fetch
-check(/took too long/.test(await message(layout('make room for a wheelchair', room))), 'layout: timeout message')
-check([422, 503, 502, 418].every((code) => layoutErrorMessage(code).length > 10), 'layoutErrorMessage covers every code')
-// the pretend server (config.ts USE_FAKE_SERVER): moves the first movable object 0.5 m towards the middle
-setFakeServer(true)
-const fake = await layout('anything goes', room)
-const before = room.objects.find((o) => o.id === fake.changes[0]?.id)
-const after = fake.world.objects.find((o) => o.id === fake.changes[0]?.id)
-check(fake.changes.length === 1 && before !== undefined && after !== undefined && before.role === 'movable', 'fake layout: moves one movable object')
-if (before && after) {
-  const d = Math.hypot(after.position[0] - before.position[0], after.position[2] - before.position[2])
-  check(d > 0 && d <= 0.5 + 1e-6, `fake layout: moved ${d} m`)
-  check(Math.hypot(after.position[0], after.position[2]) < Math.hypot(before.position[0], before.position[2]) + 1e-9, 'fake layout: towards the centre')
-}
-const fixedOnly = { ...room, objects: room.objects.filter((o) => o.role !== 'movable') }
-check((await layout('anything goes', fixedOnly)).changes.length === 0, 'fake layout: nothing movable, nothing changes')
-setFakeServer(false)
 
 console.log(failures.length ? `\nFAIL:\n - ${failures.join('\n - ')}` : '\nPASS')
 process.exit(failures.length ? 1 : 0)

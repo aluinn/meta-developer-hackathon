@@ -2,7 +2,7 @@
 // Speaking: tap the mic, talk, tap again -> WAV (wavRecorder.ts) -> server (api.ts) -> text in the box.
 // You can edit the text, then press "Use this goal" to store it (layoutGoal.ts).
 
-import { ApiError, transcribe, type LayoutResult } from './api.ts'
+import { ApiError, transcribe } from './api.ts'
 import { getLayoutGoal, onLayoutGoalChange, setLayoutGoal } from './layoutGoal.ts'
 import { startRecording, VoiceError, type Recording } from './wavRecorder.ts'
 
@@ -10,32 +10,7 @@ const MAX_SECONDS = 60
 
 type State = 'idle' | 'starting' | 'recording' | 'transcribing'
 
-/** What the Rearrange button can do. Only given in Work mode; without it the panel has no Rearrange button. */
-export interface RearrangeHooks {
-  /** Ask the AI for a new arrangement that meets `goal`. Resolves with the answer, or rejects with an ApiError (plain-English message). */
-  request: (goal: string) => Promise<LayoutResult>
-  /** Show the room as it is now (before) or as the AI proposes (after). */
-  setShowing: (which: 'before' | 'after') => void
-  /** Make the proposal the room's current layout (Work mode only). */
-  keep: () => void
-  /** Go back to the room as it was first loaded, with the scan picture. */
-  reset: () => void
-}
-
-/** What the panel shows about the current proposal. Null = no proposal and nothing kept. */
-export interface ProposalState {
-  /** The AI's answer, if there is one that has not been kept yet. */
-  result: LayoutResult | null
-  showing: 'before' | 'after'
-  /** The room is no longer the one that was loaded (a layout was kept), so Reset has something to undo. */
-  canReset: boolean
-  /** The room has a scan picture, which is hidden while the layout is changed. */
-  hasScan: boolean
-}
-
 export interface LayoutPanel {
-  /** main.ts tells the panel what state the proposal is in (after a request, a toggle, Keep or Reset). */
-  setProposal: (state: ProposalState | null) => void
   /** Stop and throw away any recording in progress (keeps what is typed in the box). */
   stopRecording: () => void
   /** Remove the panel and free everything. */
@@ -60,7 +35,7 @@ function clock(seconds: number): string {
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`
 }
 
-export function createLayoutPanel(container: HTMLElement, rearrange?: RearrangeHooks): LayoutPanel {
+export function createLayoutPanel(container: HTMLElement): LayoutPanel {
   const panel = el('div', 'layout-panel')
 
   // Two halves: speaking (left on wide screens) and the text box (right). Stacked on a phone.
@@ -110,22 +85,8 @@ export function createLayoutPanel(container: HTMLElement, rearrange?: RearrangeH
   const download = el('a', 'download-link', 'Download my recording (dev only)')
   download.hidden = true
 
-  // ---- Rearrange (Work mode): ask the AI to move things to meet the goal ----
-  const rearrangeBox = el('div', 'rearrange')
-  const rearrangeButton = el('button', 'btn btn-secondary', 'Rearrange the room')
-  rearrangeButton.type = 'button'
-  rearrangeButton.disabled = true
-  const rearrangeStatus = el('p', 'layout-status')
-  rearrangeStatus.setAttribute('role', 'status')
-  const rearrangeError = el('p', 'error')
-  rearrangeError.setAttribute('role', 'alert')
-  const proposalBox = el('div', 'proposal')
-  rearrangeBox.append(rearrangeButton, rearrangeStatus, rearrangeError, proposalBox)
-
   speak.append(micRow, status, error)
-  write.append(labelText, box, use, current)
-  if (rearrange) write.append(rearrangeBox)
-  write.append(download)
+  write.append(labelText, box, use, current, download)
   panel.append(speak, write)
   container.append(panel)
 
@@ -135,8 +96,6 @@ export function createLayoutPanel(container: HTMLElement, rearrange?: RearrangeH
   let timerId: number | null = null
   let token = 0 // bumped on cancel, so an answer that arrives late is ignored
   let downloadUrl: string | null = null
-  let asking = false // a Rearrange request is in progress
-  let rearrangeToken = 0 // bumped on dispose, so an answer that arrives late is ignored
 
   function setState(next: State): void {
     state = next
@@ -240,93 +199,10 @@ export function createLayoutPanel(container: HTMLElement, rearrange?: RearrangeH
 
   function showCurrentGoal(goal: string): void {
     current.textContent = goal === '' ? 'No layout goal chosen yet.' : `Layout goal: ${goal}`
-    rearrangeButton.disabled = goal === '' || asking
   }
   showCurrentGoal(getLayoutGoal())
   const stopListening = onLayoutGoalChange(showCurrentGoal)
   setState('idle')
-
-  // ---- Rearrange: the request, and showing the answer ----
-  const cm = (m: number) => `${Math.round(m * 100)} cm`
-  const walkableWords = (v: boolean | null) => (v === null ? 'could not tell' : v ? 'a path is open' : 'no clear path')
-
-  function showProposal(state: ProposalState | null): void {
-    proposalBox.replaceChildren()
-    if (!state) return
-    const { result, showing, canReset, hasScan } = state
-    if (result) {
-      proposalBox.append(el('h3', 'proposal-title', 'Proposed layout'))
-      proposalBox.append(el('p', 'proposal-phone-hint', 'On a small screen: press the Layout tab again to see the room in 3D, with the moved things outlined in pink.'))
-      const toggle = el('div', 'proposal-toggle')
-      toggle.setAttribute('role', 'group')
-      toggle.setAttribute('aria-label', 'Which layout to show')
-      for (const which of ['before', 'after'] as const) {
-        const b = el('button', 'btn btn-small', which === 'before' ? 'Before' : 'After')
-        b.type = 'button'
-        b.setAttribute('aria-pressed', String(showing === which))
-        b.addEventListener('click', () => rearrange?.setShowing(which))
-        toggle.append(b)
-      }
-      proposalBox.append(toggle)
-      if (result.changes.length === 0) {
-        proposalBox.append(el('p', 'proposal-none', 'The AI made no changes.'))
-      } else {
-        const list = el('ul', 'proposal-changes')
-        for (const c of result.changes) {
-          const moved = Math.hypot(c.to.position[0] - c.from.position[0], c.to.position[2] - c.from.position[2])
-          const li = el('li')
-          li.append(el('strong', undefined, `${c.label}: moved ${cm(moved)}`), el('span', undefined, c.reason))
-          list.append(li)
-        }
-        proposalBox.append(list)
-      }
-      if (result.notes) proposalBox.append(el('p', 'proposal-notes', `Notes from the AI: ${result.notes}`))
-      const walk = result.spawnToGoalWalkable
-      proposalBox.append(el('p', 'proposal-walk', `Quick check, start to goal: before, ${walkableWords(walk.before)}; after, ${walkableWords(walk.after)}.`))
-      const actions = el('div', 'proposal-actions')
-      if (result.changes.length > 0) {
-        const keep = el('button', 'btn btn-primary', 'Keep this layout')
-        keep.type = 'button'
-        keep.addEventListener('click', () => rearrange?.keep())
-        actions.append(keep)
-      }
-      proposalBox.append(actions)
-    } else if (canReset) {
-      proposalBox.append(el('p', 'proposal-none', `You are looking at your changed layout.${hasScan ? ' The scan picture is hidden because the scan cannot move.' : ''}`))
-    }
-    if (canReset) {
-      const reset = el('button', 'btn btn-small', 'Reset to the original room')
-      reset.type = 'button'
-      reset.addEventListener('click', () => rearrange?.reset())
-      proposalBox.append(reset)
-    }
-  }
-
-  rearrangeButton.addEventListener('click', async () => {
-    const goal = getLayoutGoal()
-    if (!rearrange || asking || goal === '') return
-    const mine = rearrangeToken
-    asking = true
-    rearrangeButton.disabled = true
-    rearrangeError.textContent = ''
-    rearrangeStatus.textContent = 'Asking the AI to rearrange the room… this can take up to a minute.'
-    proposalBox.setAttribute('aria-busy', 'true')
-    try {
-      await rearrange.request(goal) // main.ts shows the answer and calls setProposal
-      if (mine === rearrangeToken) proposalBox.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-    } catch (err) {
-      if (mine !== rearrangeToken) return
-      rearrangeError.textContent = err instanceof ApiError ? err.message : 'Something went wrong. Please try again.'
-    } finally {
-      if (mine === rearrangeToken) {
-        asking = false
-        rearrangeStatus.textContent = ''
-        proposalBox.removeAttribute('aria-busy')
-        rearrangeButton.disabled = getLayoutGoal() === ''
-      }
-    }
-  })
-  showCurrentGoal(getLayoutGoal())
 
   function stopRecording(): void {
     token++
@@ -338,10 +214,8 @@ export function createLayoutPanel(container: HTMLElement, rearrange?: RearrangeH
   }
 
   return {
-    setProposal: showProposal,
     stopRecording,
     dispose: () => {
-      rearrangeToken++
       stopRecording()
       stopListening()
       if (downloadUrl) URL.revokeObjectURL(downloadUrl)

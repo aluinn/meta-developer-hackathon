@@ -2,8 +2,8 @@
 // in production the server also serves this page, and in development Vite forwards these paths (vite.config.ts).
 
 import { USE_FAKE_SERVER } from './config.ts'
-import { fakeLayoutAnswer, type RawLayoutAnswer } from './fakeLayout.ts'
-import { parseWorld, type Vec3, type World } from './world.ts'
+import { FAKE_LAYOUT_MS, parseLayoutResponse, proposeFakeLayout, type LayoutResult, type RenderResult, type ScoreResult } from './layoutAgent.ts'
+import { parseWorld, type World } from './world.ts'
 
 const MAX_SCAN_BYTES = 100 * 1024 * 1024 // the server's limit
 const SCAN_EXTENSIONS = ['.glb', '.obj']
@@ -14,14 +14,19 @@ const MAX_POLL_FAILURES = 5 // in a row; a single dropped request is fine
 let pollIntervalMs = 2000
 
 let apiBase = ''
+// Whether to pretend to be the server (config.ts). Tests can flip it with setFakeServer.
+let fake = USE_FAKE_SERVER
+/** For tests only: pretend to be the server (true) or really call it (false). */
+export function setFakeServer(on: boolean): void {
+  fake = on
+}
+/** Is the pretend server on? (The screens say so next to numbers the pretend server made up.) */
+export function isFakeServer(): boolean {
+  return fake
+}
 /** For tests only: how often to ask the server for progress. */
 export function setPollInterval(ms: number): void {
   pollIntervalMs = ms
-}
-let useFakeServer: boolean = USE_FAKE_SERVER
-/** For tests only: pretend to be the server (true) or really call it (false), whatever config.ts says. */
-export function setFakeServer(on: boolean): void {
-  useFakeServer = on
 }
 /** For tests only: where the server is, when the page is not served by it. */
 export function setApiBase(base: string): void {
@@ -228,7 +233,7 @@ function voiceError(message: string, status = 0): ApiError {
 
 /** Send a recording (a 16 kHz mono WAV) to the server and get back what was said. */
 export async function transcribe(wav: Blob): Promise<string> {
-  if (useFakeServer) {
+  if (fake) {
     await sleep(1000)
     return FAKE_TRANSCRIPT
   }
@@ -265,129 +270,135 @@ export async function transcribe(wav: Blob): Promise<string> {
   return data.transcript.trim()
 }
 
-// ---- Layout: ask the AI to rearrange the room (POST /layout) ----
+// ---- Layout agent, before/after pictures and the scan score (Z6) ----
 
-const LAYOUT_TIMEOUT_MS = 120 * 1000 // the model can take a while, and the free server may be waking up
-const NO_SCAN_ID = '0'.repeat(32) // example rooms have no uploaded scan; the server only needs the id to look like one when the world is sent along
+const LAYOUT_TIMEOUT_MS = 120 * 1000 // the AI can take 20 seconds or more
+const RENDER_TIMEOUT_MS = 180 * 1000 // drawing a picture is slower still
+const SCORE_TIMEOUT_MS = 90 * 1000 // the first score for a scan has to render it from 8 cameras
+const MAX_PHOTO_BYTES = 15 * 1024 * 1024 // the server's limit
+const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
-export interface LayoutChange {
-  id: string
-  label: string
-  from: { position: Vec3; rotation_y: number }
-  to: { position: Vec3; rotation_y: number }
-  reason: string
+export const NOT_SCANNED =
+  "This room wasn't scanned, so the server doesn't know it. Layout suggestions and the match score need a room you scanned and uploaded."
+const SCAN_FORGOTTEN =
+  'The server no longer has this scan (the free server forgets scans when it restarts). Upload the scan again.'
+
+/** Messages for the statuses we have something better to say about. Anything else falls back to the general wording in explain(). */
+export const LAYOUT_ERRORS: Record<number, string> = {
+  404: SCAN_FORGOTTEN,
+  422: "The layout agent's suggestion didn't pass our checks, so nothing was changed. Try again, or word your goal differently.",
+}
+export const RENDER_ERRORS: Record<number, string> = {
+  404: SCAN_FORGOTTEN,
+  413: 'That photo is too big. The limit is 15 MB.',
+  415: "We couldn't read that photo. Use a JPEG, PNG or WebP picture (iPhone HEIC photos don't work).",
+  422: "We can't draw this one: it only works when furniture was moved (and nothing added or removed). Try a different layout.",
+}
+export const SCORE_ERRORS: Record<number, string> = {
+  404: 'No match score yet: the scan has to be fully processed (labelled) first.',
 }
 
-export interface LayoutResult {
-  /** The whole room with the moves applied. */
-  world: World
-  changes: LayoutChange[]
-  /** Anything the AI could not do, in its own words. Empty if nothing. */
-  notes: string
-  attempts: number
-  /** A rough check by the server (null = could not tell). The clearance check on the page is the proper one. */
-  spawnToGoalWalkable: { before: boolean | null; after: boolean | null }
-}
-
-const LAYOUT_NOT_REACHED = "Couldn't reach the server. Is it running? (If it was asleep, try again in a minute.)"
-
-/** Turn a /layout error code into a sentence for a person (the codes are in docs/architecture.md, "A4 contracts"). */
-export function layoutErrorMessage(status: number): string {
-  switch (status) {
-    case 422:
-      return "We couldn't find a valid arrangement for that, so nothing was changed. Try asking for something simpler."
-    case 503:
-      return 'The AI service is not set up on the server yet (no API key), so the layout cannot be changed.'
-    case 502:
-      return 'The AI service had a problem. Please try again in a moment.'
-    default:
-      return `Something went wrong talking to the server (error ${status}). Please try again.`
+/** Like request(), but says something specific for the statuses in `messages`. */
+async function endpoint(path: string, init: RequestInit, timeoutMs: number, messages: Record<number, string>): Promise<Response> {
+  try {
+    return await request(path, init, timeoutMs)
+  } catch (err) {
+    const text = err instanceof ApiError && err.status !== undefined ? messages[err.status] : undefined
+    if (!text) throw err
+    const replaced = new ApiError(text)
+    replaced.status = (err as ApiError).status
+    throw replaced
   }
 }
 
-/** The scan's id, from world.source_scan ("<scan_id>/original.glb"), or a placeholder for rooms that were not scanned. */
-export function scanIdOf(world: World): string {
-  const match = /^([0-9a-f]{32})\//.exec(world.source_scan)
-  return match ? match[1] : NO_SCAN_ID
-}
-
-function layoutError(message: string, status = 0): ApiError {
-  const error = new ApiError(message)
-  error.status = status
-  return error
-}
-
-function isObject(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v)
-}
-
-function parseChange(c: unknown): LayoutChange {
-  if (!isObject(c) || typeof c.id !== 'string' || typeof c.label !== 'string' || typeof c.reason !== 'string' || !isObject(c.from) || !isObject(c.to)) {
-    throw new Error('a change is missing something')
-  }
-  const end = (e: Record<string, unknown>) => {
-    const p = e.position
-    if (!Array.isArray(p) || p.length !== 3 || !p.every((n) => typeof n === 'number' && Number.isFinite(n))) throw new Error('bad position')
-    if (typeof e.rotation_y !== 'number') throw new Error('rotation_y missing')
-    return { position: [p[0], p[1], p[2]] as Vec3, rotation_y: e.rotation_y }
-  }
-  return { id: c.id, label: c.label, from: end(c.from), to: end(c.to), reason: c.reason }
-}
-
-function parseAnswer(data: unknown): LayoutResult {
-  if (!isObject(data) || !Array.isArray(data.changes)) throw new Error('no changes list')
-  const walk = isObject(data.spawn_to_goal_walkable) ? data.spawn_to_goal_walkable : {}
-  const flag = (v: unknown): boolean | null => (typeof v === 'boolean' ? v : null)
-  return {
-    world: parseWorld(data.world),
-    changes: data.changes.map(parseChange),
-    notes: typeof data.notes === 'string' ? data.notes : '',
-    attempts: typeof data.attempts === 'number' ? data.attempts : 1,
-    spawnToGoalWalkable: { before: flag(walk.before), after: flag(walk.after) },
+/** The server's answer, read as JSON, or a friendly error if it isn't. */
+async function readJson(res: Response): Promise<unknown> {
+  try {
+    return await res.json()
+  } catch {
+    throw new ApiError("The server's answer wasn't what we expected. Please try again.")
   }
 }
 
 /**
- * Ask the AI to rearrange `world` to meet `goal`. Only movable objects move; nothing is added or removed. Throws an ApiError with
- * a plain-English message when the AI's answer was rejected (422), the server has no key (503), or the server can't be reached.
+ * Ask the layout agent to rearrange the room for a goal (POST /layout). `scanId` is the scan the room came from (scanIdOf(world));
+ * the real server needs one. Only movable objects move. The pretend server works on any room.
  */
-export async function layout(goal: string, world: World): Promise<LayoutResult> {
+export async function getLayout(goal: string, world: World, scanId: string | null): Promise<LayoutResult> {
   const text = goal.trim()
-  if (text.length < 3) throw layoutError('Say or type what you want done to the room first.')
-  const scanId = scanIdOf(world)
-  if (useFakeServer) {
-    await sleep(1200)
-    return parseAnswer(fakeLayoutAnswer(scanId, text, world) satisfies RawLayoutAnswer)
+  if (text.length < 3) throw new ApiError('Say or type a goal first, like "make room for a wheelchair".')
+  if (fake) {
+    await sleep(FAKE_LAYOUT_MS)
+    return proposeFakeLayout(world, text)
   }
-
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), LAYOUT_TIMEOUT_MS)
-  let response: Response
+  if (!scanId) throw new ApiError(NOT_SCANNED)
+  const body = JSON.stringify({ scan_id: scanId, goal: text, world })
+  const res = await endpoint('/layout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }, LAYOUT_TIMEOUT_MS, LAYOUT_ERRORS)
   try {
-    response = await fetch(apiBase + '/layout', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scan_id: scanId, goal: text, world }),
-      signal: controller.signal,
-    })
+    return parseLayoutResponse(await readJson(res), text)
   } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') throw layoutError('The server took too long to answer. Please try again.')
-    throw layoutError(LAYOUT_NOT_REACHED)
-  } finally {
-    clearTimeout(timer)
+    if (err instanceof ApiError) throw err
+    throw new ApiError("The layout agent's answer wasn't what we expected. Please try again.")
   }
+}
 
-  if (!response.ok) {
-    // Our server always explains itself with a JSON {"detail": ...}. An error WITHOUT that is the hosting layer (asleep, restarting) or the dev proxy.
-    const body: unknown = await response.json().catch(() => null)
-    const fromServer = isObject(body) && 'detail' in body
-    if (!fromServer && response.status >= 500) throw layoutError(LAYOUT_NOT_REACHED, response.status)
-    throw layoutError(layoutErrorMessage(response.status), response.status)
+/** Check a chosen photo before sending it, so mistakes get a clear message straight away. */
+export function checkPhoto(file: { name: string; size: number; type: string }): void {
+  const name = file.name.toLowerCase()
+  if (/\.(heic|heif)$/.test(name) || /hei[cf]/.test(file.type)) {
+    throw new ApiError("iPhone HEIC photos aren't supported. Take the photo as JPEG (Settings > Camera > Formats > Most Compatible) or choose a JPEG, PNG or WebP picture.")
   }
-  const data: unknown = await response.json().catch(() => null)
-  try {
-    return parseAnswer(data)
-  } catch {
-    throw layoutError("The server's answer wasn't what we expected. Please try again.", response.status)
+  const okType = PHOTO_TYPES.includes(file.type) || (file.type === '' && /\.(jpe?g|png|webp)$/.test(name))
+  if (!okType) throw new ApiError('Please choose a JPEG, PNG or WebP picture.')
+  if (file.size === 0) throw new ApiError('That photo is empty.')
+  if (file.size > MAX_PHOTO_BYTES) throw new ApiError(RENDER_ERRORS[413])
+}
+
+/** Ask for realistic before and after pictures of the moved furniture, from a photo of the room (POST /render). */
+export async function renderBeforeAfter(scanId: string | null, photo: File, oldWorld: World, newWorld: World): Promise<RenderResult> {
+  checkPhoto(photo)
+  if (fake) {
+    await sleep(800)
+    return { beforeUrl: null, afterUrl: null, moved: [], changedFraction: null, likelyChangedTooMuch: false } // the pretend server draws nothing
   }
+  if (!scanId) throw new ApiError(NOT_SCANNED)
+  const form = new FormData()
+  form.append('scan_id', scanId)
+  form.append('photo', photo, photo.name)
+  form.append('old_world', JSON.stringify(oldWorld))
+  form.append('new_world', JSON.stringify(newWorld))
+  const res = await endpoint('/render', { method: 'POST', body: form }, RENDER_TIMEOUT_MS, RENDER_ERRORS)
+  const data = await readJson(res)
+  const d = typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : {}
+  if (typeof d.before_url !== 'string' || typeof d.after_url !== 'string') {
+    throw new ApiError("The server's answer wasn't what we expected. Please try again.")
+  }
+  const stamp = `?t=${Date.now()}` // the same address is reused for every render, so ask the browser not to show an old picture
+  const moved = Array.isArray(d.moved)
+    ? d.moved.flatMap((m: unknown) => {
+        const o = typeof m === 'object' && m !== null ? (m as Record<string, unknown>) : {}
+        return typeof o.id === 'string' ? [{ id: o.id, label: typeof o.label === 'string' ? o.label : o.id }] : []
+      })
+    : []
+  return {
+    beforeUrl: apiBase + d.before_url + stamp,
+    afterUrl: apiBase + d.after_url + stamp,
+    moved,
+    changedFraction: typeof d.changed_fraction === 'number' ? d.changed_fraction : null,
+    likelyChangedTooMuch: d.likely_changed_too_much === true,
+  }
+}
+
+/** How closely our 3D model matches the scanned room (GET /score/{scan_id}). Only for a real, labelled scan. */
+export async function getScore(scanId: string | null): Promise<ScoreResult> {
+  if (fake) {
+    await sleep(600)
+    return { overallPercent: 72, warnings: [], pretend: true }
+  }
+  if (!scanId) throw new ApiError(NOT_SCANNED)
+  const data = await readJson(await endpoint(`/score/${scanId}`, {}, SCORE_TIMEOUT_MS, SCORE_ERRORS))
+  const d = typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : {}
+  if (typeof d.overall_percent !== 'number') throw new ApiError("The server's answer wasn't what we expected. Please try again.")
+  const warnings = Array.isArray(d.warnings) ? d.warnings.filter((w): w is string => typeof w === 'string') : []
+  return { overallPercent: d.overall_percent, warnings, pretend: false }
 }

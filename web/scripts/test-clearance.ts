@@ -248,23 +248,6 @@ console.log('\n9. Speed')
   check(exampleMs < 50 && bigMs < 100, 'fast enough on a laptop (a phone is roughly 3 to 5 times slower; the budget there is 200 ms)')
 }
 
-// ---- 10. A rearranged room gives a different answer (what the Layout tab's Rearrange relies on) ----
-console.log('\n10. Moving one object changes the answer')
-{
-  // A wall of boxes with a 0.5 m gap; the north half is movable furniture (e.g. a wardrobe).
-  const before = room(wallWithGap(-0.25, 0.25).map((o) => (o.id === 'wall_north' ? { ...o, role: 'movable' as Role } : o)), [-2, 0], [2, 0])
-  const after: World = structuredClone(before)
-  const wardrobe = after.objects.find((o) => o.id === 'wall_north')
-  if (wardrobe) wardrobe.position = [wardrobe.position[0], wardrobe.position[1], wardrobe.position[2] + 0.6] // slide it 60 cm along the wall: the gap is now 1.1 m
-  const w = PERSON_WIDTHS.wheelchair.widthM
-  const a = checkClearance(before, w)
-  const b = checkClearance(after, w)
-  check(!a.reachable && a.blockedAt?.reason === 'gap', 'before: a wheelchair is blocked by the 50 cm gap')
-  check(b.reachable && b.blockedAt === null, 'after moving one object: the same wheelchair gets through')
-  check(checkClearance(before, PERSON_WIDTHS.walking.widthM).reachable, 'before: a walking person (0.5 m) is still fine')
-  check(before.objects.find((o) => o.id === 'wall_north')?.position[2] !== after.objects.find((o) => o.id === 'wall_north')?.position[2], 'the copy really was changed, and the original was not')
-}
-
 console.log(`\n${passes} passed, ${failures.length} failed`)
 if (failures.length > 0) {
   console.log('FAILED:\n' + failures.map((f) => `  - ${f}`).join('\n'))

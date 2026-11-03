@@ -1,8 +1,7 @@
 // The "Clearance check" section of the Layout tab: pick who is walking (or any width), and see whether they can still get
 // from Start to Goal, plus the walkability score. The maths is in clearance.ts; the 3D drawing is in clearanceView.ts.
 
-import { checkClearance, PERSON_WIDTHS, snapNotes, summarise, WIDTH_SLIDER, type PersonKind } from './clearance.ts'
-import { beforeAfterLine, verdict } from './clearanceVerdict.ts'
+import { checkClearance, PERSON_WIDTHS, personLabel, snapNotes, summarise, WIDTH_SLIDER, type PersonKind } from './clearance.ts'
 import { createClearanceView } from './clearanceView.ts'
 import type { Viewer } from './viewer.ts'
 import type { World } from './world.ts'
@@ -10,13 +9,12 @@ import type { World } from './world.ts'
 export interface ClearancePanel {
   /** Check a different room (e.g. the "after" layout). */
   setWorld: (world: World) => void
-  /**
-   * Also check a proposed layout against the current one and show "Before: ... | After: ..." with a switch for which one is
-   * drawn in 3D. `showing` is the one drawn now. Null removes the comparison.
-   */
-  setCompare: (compare: { before: World; after: World; showing: 'before' | 'after' } | null) => void
   /** Show or hide the drawings in the 3D view (the Layout tab was opened or closed). */
   setActive: (active: boolean) => void
+  /** The person's width now chosen, in metres. */
+  getWidth: () => number
+  /** Call `fn(width)` after every recalculation (width or room changed). Returns a function that stops it. */
+  onChange: (fn: (widthM: number) => void) => () => void
   /** Remove the section and the drawings, and free everything. */
   dispose: () => void
 }
@@ -35,9 +33,8 @@ function metres(m: number): string {
   return `${m.toFixed(2).replace(/0$/, '')} m`
 }
 
-export function createClearancePanel(container: HTMLElement, viewer: Viewer, initialWorld: World, onSwitch?: (which: 'before' | 'after') => void): ClearancePanel {
+export function createClearancePanel(container: HTMLElement, viewer: Viewer, initialWorld: World): ClearancePanel {
   let world = initialWorld
-  let compare: { before: World; after: World; showing: 'before' | 'after' } | null = null
   let width: number = PERSON_WIDTHS.walking.widthM
   const view = createClearanceView(viewer)
 
@@ -77,23 +74,6 @@ export function createClearancePanel(container: HTMLElement, viewer: Viewer, ini
   slider.addEventListener('input', () => setWidth(Number(slider.value), false))
 
   // ---- The answer ----
-  const verdictLine = el('p', 'clearance-verdict')
-  verdictLine.setAttribute('aria-live', 'polite')
-  const compareBox = el('div', 'clearance-compare')
-  compareBox.hidden = true
-  const compareLine = el('p', 'clearance-compare-line')
-  const compareSwitch = el('div', 'proposal-toggle')
-  compareSwitch.setAttribute('role', 'group')
-  compareSwitch.setAttribute('aria-label', 'Which layout to draw')
-  const switchButtons = new Map<'before' | 'after', HTMLButtonElement>()
-  for (const which of ['before', 'after'] as const) {
-    const b = el('button', 'btn btn-small', which === 'before' ? 'Show before' : 'Show after')
-    b.type = 'button'
-    b.addEventListener('click', () => onSwitch?.(which))
-    switchButtons.set(which, b)
-    compareSwitch.append(b)
-  }
-  compareBox.append(compareLine, compareSwitch)
   const score = el('p', 'clearance-score')
   score.setAttribute('aria-live', 'polite')
   const notes = el('ul', 'clearance-notes')
@@ -137,34 +117,21 @@ export function createClearancePanel(container: HTMLElement, viewer: Viewer, ini
     how.append(el('p', undefined, text))
   }
 
-  const disclaimer = el('p', 'clearance-disclaimer', 'Sizes are estimates from phone LiDAR. This is a planning aid, not a safety assessment.')
-
-  section.append(title, hint, buttons, sliderRow, verdictLine, compareBox, score, notes, pause, key, how, disclaimer, timing)
+  section.append(title, hint, buttons, sliderRow, score, notes, pause, key, how, timing)
   container.append(section)
 
   // ---- Working it out ----
-  function labelFor(w: number): string {
-    const kind = KINDS.find((k) => Math.abs(PERSON_WIDTHS[k].widthM - w) < 1e-6)
-    return kind ? PERSON_WIDTHS[kind].label : 'Custom width'
-  }
+  const listeners = new Set<(widthM: number) => void>()
 
   function recalculate(): void {
     const result = checkClearance(world, width)
     view.show(result, world)
-    const v = verdict(result)
-    verdictLine.textContent = `${v.pass ? 'PASS' : 'FAIL'}: ${v.text}`
-    verdictLine.classList.toggle('is-pass', v.pass)
-    verdictLine.classList.toggle('is-fail', !v.pass)
-    if (compare) {
-      compareLine.textContent = beforeAfterLine(checkClearance(compare.before, width), checkClearance(compare.after, width))
-      for (const [which, b] of switchButtons) b.setAttribute('aria-pressed', String(compare.showing === which))
-    }
-    compareBox.hidden = compare === null
-    score.textContent = summarise(result, labelFor(width))
+    score.textContent = summarise(result, personLabel(width))
     score.classList.toggle('is-reachable', result.reachable)
     score.classList.toggle('is-blocked', !result.reachable)
     notes.replaceChildren(...snapNotes(result).map((text) => el('li', undefined, text)))
     if (import.meta.env.DEV) timing.textContent = `Worked out in ${result.gridInfo.ms.toFixed(0)} ms (dev only)`
+    for (const fn of listeners) fn(width)
   }
 
   // Dragging the slider fires many times a second: work it out at most once per screen frame.
@@ -192,11 +159,12 @@ export function createClearancePanel(container: HTMLElement, viewer: Viewer, ini
       world = next
       recalculate()
     },
-    setCompare: (next) => {
-      compare = next
-      recalculate()
-    },
     setActive: (active) => view.setVisible(active),
+    getWidth: () => width,
+    onChange: (fn) => {
+      listeners.add(fn)
+      return () => listeners.delete(fn)
+    },
     dispose: () => {
       cancelAnimationFrame(frame)
       view.dispose()
