@@ -85,6 +85,9 @@ function buildUpload(h: ScreenHandlers) {
     }
   })
 
+  // A file dropped anywhere else on the page must not make the browser open it and leave the app.
+  for (const type of ['dragover', 'drop'] as const) section.addEventListener(type, (e) => e.preventDefault())
+
   const button = (label: string, kind: 'primary' | 'ghost', onClick: () => void) => {
     const b = el('button', `landing-btn landing-btn-${kind}`, label)
     b.type = 'button'
@@ -98,6 +101,23 @@ function buildUpload(h: ScreenHandlers) {
 
   const half = (mode: Mode, eyebrow: string, titleText: string, text: string, chips: string[], primary: string, secondary: string) => {
     const side = el('div', `half half-${mode}`)
+    // Dropping a scan file on a half is the same as choosing it with the button on that half.
+    side.addEventListener('dragover', (e) => {
+      if (!e.dataTransfer?.types.includes('Files')) return
+      e.preventDefault()
+      side.classList.add('is-dragover')
+    })
+    side.addEventListener('dragleave', (e) => {
+      if (!side.contains(e.relatedTarget as Node | null)) side.classList.remove('is-dragover')
+    })
+    side.addEventListener('drop', (e) => {
+      e.preventDefault()
+      side.classList.remove('is-dragover')
+      const file = e.dataTransfer?.files[0]
+      if (!file) return
+      section.dataset.chosen = mode
+      h.onFileChosen(file, mode)
+    })
     const bg = el('div', 'half-bg')
     const inner = el('div', 'half-inner')
     const tag = el('p', 'half-eyebrow', eyebrow)
