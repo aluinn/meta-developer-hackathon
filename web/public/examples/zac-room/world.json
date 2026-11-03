@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "source_scan": "examples/zac-room/scan.glb",
+  "room": {
+    "bounds": {
+      "min": [
+        -2.626,
+        -1.636,
+        -1.631
+      ],
+      "max": [
+        2.606,
+        1.362,
+        1.543
+      ]
+    },
+    "floor_y": -1.532
+  },
+  "objects": [
+    {
+      "id": "bed_1",
+      "label": "bed",
+      "role": "climbable",
+      "confidence": 0.812,
+      "position": [
+        -1.392,
+        -1.058,
+        -0.849
+      ],
+      "size": [
+        2.107,
+        0.781,
+        1.258
+      ],
+      "rotation_y": 0.0
+    },
+    {
+      "id": "curtain_1",
+      "label": "curtain",
+      "role": "fixed",
+      "confidence": 0.85,
+      "position": [
+        -2.413,
+        0.104,
+        0.326
+      ],
+      "size": [
+        0.162,
+        1.347,
+        1.005
+      ],
+      "rotation_y": 0.0
+    }
+  ],
+  "spawn": [
+    2.274,
+    -1.532,
+    -1.331
+  ],
+  "goal": [
+    -2.326,
+    -1.532,
+    1.169
+  ]
+}
