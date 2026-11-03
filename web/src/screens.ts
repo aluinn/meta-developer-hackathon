@@ -258,6 +258,12 @@ function buildResults(h: ScreenHandlers) {
   const body = el('div', 'work-body')
   body.append(view, workPanel)
 
+  // The same as the Layout tab, but where people look first in Work mode (the panel is hidden in Game mode).
+  const layoutButton = el('button', 'btn btn-primary work-layout-btn', 'Change the layout (voice)')
+  layoutButton.type = 'button'
+  layoutButton.setAttribute('aria-expanded', 'false')
+  layoutButton.addEventListener('click', h.onLayout)
+
   section.append(header, body, layoutBox, tabs)
   const setPlaying = (playing: boolean) => {
     section.classList.toggle('playing', playing)
@@ -280,12 +286,13 @@ function buildResults(h: ScreenHandlers) {
       list.append(li)
     }
     if (world.objects.length === 0) list.append(el('li', undefined, 'No objects found.'))
-    workPanel.replaceChildren(el('h2', undefined, 'Room details'), size, el('h2', undefined, `Objects (${world.objects.length})`), list)
+    workPanel.replaceChildren(layoutButton, el('h2', undefined, 'Room details'), size, el('h2', undefined, `Objects (${world.objects.length})`), list)
   }
   const setLayoutOpen = (open: boolean) => {
     layoutBox.hidden = !open
     section.classList.toggle('layout-open', open)
     tabButtons.get('layout')?.setAttribute('aria-selected', String(open))
+    layoutButton.setAttribute('aria-expanded', String(open))
   }
   return { section, heading, detail, view, message, setPlaying, setWorkInfo, layoutBox, setLayoutOpen }
 }
