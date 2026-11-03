@@ -12,6 +12,18 @@ Add a new entry at the TOP after each work session. Copy the template.
 - Next:
 ```
 
+## 2026-11-02 - Aluinn (bigger example room)
+- What I did: The example room used for Game mode is now much bigger (about 14 x 12 m, 14 objects, extra sofa, shelves, table, crates and ottoman to climb on), built in `web/src/bigExample.ts` from the shared example, so `shared/example_world.json` is unchanged and the server tests still use it. Nothing can hit you for 3 seconds after GO, a hit gives 2.5 s of safety, and the camera for the person-sized character sits further back (6.5 m) so the hazards can be seen coming. Work mode keeps the small original example.
+- What worked / what didn't: A browser run showed the bigger room racing with a 32 m route, and standing still for 30 s lost no lives.
+- AI tools used (and for what): Claude Code.
+- Next: Play-test the big room; tune hazard count and speed if it is still too hard.
+
+## 2026-11-02 - Aluinn (depth cues and drawing animation)
+- What I did: Soft shadows on the floor under the rolling balls and under the floating item boxes, a ring on the floor under every gate (it pulses on the next gate) and a ring under each item box, so it is easier to see where things really are in 3D. In the Character panel, a pencil now draws a little character on lined paper (looping, 8 s) while the real picture is being generated, then the finished picture replaces it.
+- What worked / what didn't: Checked with browser screenshots (shadows, rings, and frames of the pencil animation with the server request held open). Not yet seen with a real generated picture on the live site.
+- AI tools used (and for what): Claude Code wrote the code and the SVG drawing (our own, nothing downloaded).
+- Next: Play-test; tune ring and shadow sizes if they get in the way.
+
 ## 2026-11-03 - Aluinn (merge of main into feature/layout-and-clearance)
 - What I did: PR conflicts with Zac's Z6 work on `main` (he built his own layout agent panel, `layoutAgent.ts`, `layoutAgentPanel.ts`, `changesView.ts`, while I built a Rearrange button and Before/After on the same tabs). Kept Zac's web app as it is on `main` and dropped my duplicate web code (`fakeLayout.ts`, `changeOverlay.ts`, `clearanceVerdict.ts`, `test-verdict.ts`, and my edits to `api.ts`, `main.ts`, `viewer.ts`, `layoutPanel.ts`, `clearancePanel.ts` and their tests). Everything on the server side stays: `min_clearance_m` and `server/labelling/clearance.py` and their test. On top of main I re-applied three small web changes: `USE_FAKE_SERVER = false`, `/character` forwarded by the Vite dev proxy, and the "Change the layout (voice)" button in the Work mode side panel.
 - What worked / what didn't: the entries below that mention Rearrange, `fakeLayout.ts`, `clearanceVerdict.ts` and Before/After describe web code that is no longer in the repo; the server stages (1 to 5 on the server) are unchanged. Zac's panel only offers layout changes for a scanned room (the example room is not on the server), so with the fake switched off the example room's Layout tab will say so.

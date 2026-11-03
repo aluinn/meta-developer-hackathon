@@ -26,7 +26,8 @@ export const TUNING = {
   checkpointBonus: 8, // seconds added at every gate
   lives: 3, // you lose one when a hazard hits you; at none, the race is over. Falling never costs a life.
   stunSeconds: 0.8,
-  invulnerableSeconds: 2,
+  invulnerableSeconds: 2.5, // after a hit you cannot be hit again for this long
+  startGraceSeconds: 3, // and nothing can hit you just after GO
   itemRespawnSeconds: 12,
   boostSpeed: 1.9, // times the normal run speed
   springJump: 1.45, // times the normal jump speed (which is about twice the height)
@@ -179,6 +180,7 @@ export class Game {
       this.countdown -= dt
       if (this.countdown <= 0) {
         this.phase = 'running'
+        this.invulnerable = TUNING.startGraceSeconds // nothing can hit you for the first moments
         events.push({ type: 'go' })
       }
       return events

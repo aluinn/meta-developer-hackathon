@@ -7,6 +7,7 @@ import { checkScanFile, processScan } from './api.ts'
 import { openCharacterPanel } from './characterPanel.ts'
 import type { PlayMode } from './play.ts'
 import { scanMeshUrl } from './scanMesh.ts'
+import { loadBigExampleWorld } from './bigExample.ts'
 import { createScreens, type Mode } from './screens.ts'
 import { createViewer, type Viewer } from './viewer.ts'
 import { loadClearanceTestWorld, loadExampleWorld, loadTestWorld, type World } from './world.ts'
@@ -138,7 +139,8 @@ const screens = createScreens(root, {
     void openWorld(file.name.replace(/\.[^.]+$/, ''), () => processScan(file, screens.setStatus), mode)
   },
 
-  onUseExample: (mode) => openWorld('Example room', loadExampleWorld, mode),
+  // Game mode gets a roomier example, because the race needs space to dodge in. Work mode keeps the original small one.
+  onUseExample: (mode) => openWorld('Example room', mode === 'game' ? loadBigExampleWorld : loadExampleWorld, mode),
 
   // Development only: the production build leaves this out.
   onUseTestRoom: import.meta.env.DEV ? () => openWorld('Test room', loadTestWorld, 'game') : undefined,
