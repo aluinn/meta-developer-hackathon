@@ -172,7 +172,9 @@ export async function startPlay(container: HTMLElement, world: World, onBack: ()
     const area = (max[0] - min[0]) * (max[2] - min[2])
     while (area / (cell * cell) > 20000) cell *= 1.25 // a big room gets a coarser map, to stay quick
     graph = buildGraph(createProbe(physics, max[1] + 0.2, CHARACTER.height, character.collider), {
-      min, max, cell, margin: CHARACTER.radius * 1.2, stepUp: CHARACTER.stepHeight, jumpUp: jumpHeight * 0.85,
+      // On a real scan the room's bounds include the thick walls, and the ceiling's top is a surface too: keep off both.
+      min, max, cell, margin: scanMesh ? 0.2 : CHARACTER.radius * 1.2, stepUp: CHARACTER.stepHeight, jumpUp: jumpHeight * 0.85,
+      maxY: scanMesh ? world.room.floor_y + 1.3 : undefined,
     })
     return graph
   }

@@ -38,6 +38,8 @@ export interface GraphOptions {
   margin: number // stay this far from the room's edges (the walls)
   stepUp: number // height differences up to this can be walked
   jumpUp: number // ...up to this can be jumped (up) or dropped (down)
+  /** Ignore surfaces higher than this (a scan's ceiling has an up-facing top that is not part of the room). */
+  maxY?: number
 }
 
 const FORWARD = [[1, -1], [1, 0], [1, 1], [0, 1]] // each pair of neighbours is looked at once, from one side
@@ -53,7 +55,7 @@ export function buildGraph(probe: Probe, o: GraphOptions): Graph {
     for (let j = 0; j < nz; j++) {
       const x = x0 + i * o.cell
       const z = z0 + j * o.cell
-      columns[i * nz + j] = probe.surfaces(x, z).map((y) => nodes.push({ x, y, z }) - 1)
+      columns[i * nz + j] = probe.surfaces(x, z).filter((y) => y <= (o.maxY ?? Infinity)).map((y) => nodes.push({ x, y, z }) - 1)
     }
   }
 
