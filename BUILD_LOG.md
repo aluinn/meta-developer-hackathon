@@ -12,6 +12,12 @@ Add a new entry at the TOP after each work session. Copy the template.
 - Next:
 ```
 
+## 2026-11-04 - Aluinn (README rewrite, AI tools used)
+- What I did: Rewrote `README.md` for judges: what it does (Game and Work mode), the live link, an "AI tools used" section, the models-propose-code-checks table, a diagram, setup, tests and honest limits. No code changed.
+- What worked / what didn't: Checked in `/server` that all four models are really called: SAM 3.1 (`labelling/sam.py`), Muse Spark (`roles.py`, `layout.py`), Muse Image (`muse_image.py`, used by `/render` and `/character`) and Muse Voice Transcribe (`transcribe.py`). The clearance check and scan-match score make no model calls. Not run for real in this session: voice from a browser microphone.
+- AI tools used (and for what): Claude Code wrote the README text from the code and docs. Meta models, as in the README, run inside the app.
+- Next: Check the README renders well on GitHub (the diagram).
+
 ## 2026-11-02 - Aluinn (bigger example room)
 - What I did: The example room used for Game mode is now much bigger (about 14 x 12 m, 14 objects, extra sofa, shelves, table, crates and ottoman to climb on), built in `web/src/bigExample.ts` from the shared example, so `shared/example_world.json` is unchanged and the server tests still use it. Nothing can hit you for 3 seconds after GO, a hit gives 2.5 s of safety, and the camera for the person-sized character sits further back (6.5 m) so the hazards can be seen coming. Work mode keeps the small original example.
 - What worked / what didn't: A browser run showed the bigger room racing with a 32 m route, and standing still for 30 s lost no lives.
