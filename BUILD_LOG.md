@@ -18,6 +18,12 @@ Add a new entry at the TOP after each work session. Copy the template.
 - AI tools used (and for what): Claude Code wrote the README text from the code and docs. Meta models, as in the README, run inside the app.
 - Next: Check the README renders well on GitHub (the diagram).
 
+## 2026-11-04 - Aluinn (race gates stay inside the room on real scans)
+- What I did: In Zac's room two of the four gates (and many item boxes) were placed 2.3 m up, on the top of the scanned ceiling, and the others hard against the wall edge. Now: on a real scan the walkable map ignores anything more than 1.3 m above the floor and keeps 20 cm off the room's bounds (they include the wall thickness); gates, item boxes, hazards and the flag only go on open ground (level floor around them, `openGround` in `course.ts`). Made-up rooms keep their old behaviour (the new filter is gentler on their coarse map).
+- What worked / what didn't: In headless Chrome, three fresh races in Zac's room: all gates on the floor or on the bed top, none on the ceiling or in a wall. tsc, build and all 8 web tests pass. Not played start to finish by hand; the studio scan has no Game link, so it was only covered by the tests.
+- AI tools used (and for what): Claude Code found the cause by dumping the walkable map from the live app.
+- Next: Play a full race in Zac's room.
+
 ## 2026-11-02 - Aluinn (bigger example room)
 - What I did: The example room used for Game mode is now much bigger (about 14 x 12 m, 14 objects, extra sofa, shelves, table, crates and ottoman to climb on), built in `web/src/bigExample.ts` from the shared example, so `shared/example_world.json` is unchanged and the server tests still use it. Nothing can hit you for 3 seconds after GO, a hit gives 2.5 s of safety, and the camera for the person-sized character sits further back (6.5 m) so the hazards can be seen coming. Work mode keeps the small original example.
 - What worked / what didn't: A browser run showed the bigger room racing with a 32 m route, and standing still for 30 s lost no lives.

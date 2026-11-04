@@ -55,20 +55,42 @@ const dist = (g: Graph, a: NodeId, b: NodeId) =>
   Math.hypot(g.nodes[a].x - g.nodes[b].x, (g.nodes[a].y - g.nodes[b].y) * 2, g.nodes[a].z - g.nodes[b].z)
 const flat = (g: Graph, a: NodeId, b: NodeId) => Math.hypot(g.nodes[a].x - g.nodes[b].x, g.nodes[a].z - g.nodes[b].z)
 
+/** Nodes with level ground you can walk on all around them (about two cells each way; one on a coarse map, where a cell is already big). */
+function openGround(g: Graph, nodes: NodeId[]): NodeId[] {
+  const reach = g.cell > 0.2 ? 1 : 2
+  const want = reach === 1 ? 6 : 20 // of the 8 or 24 other cells in the 3 x 3 or 5 x 5 patch
+  return nodes.filter((start) => {
+    const seen = new Set<NodeId>([start])
+    let ring = [start]
+    for (let depth = 0; depth < reach; depth++) {
+      const next: NodeId[] = []
+      for (const n of ring) for (const e of g.adj[n]) if (!e.jump && !seen.has(e.to)) { seen.add(e.to); next.push(e.to) }
+      ring = next
+    }
+    return seen.size - 1 >= want
+  })
+}
+
 export function generateCourse(g: Graph, spawn: Vec3, o: CourseOptions): Course | null {
   const rng = makeRng(o.seed)
   const start = g.nearest(spawn[0], spawn[1], spawn[2])
   if (start === null) return null
   const fromStart = shortestPaths(g, start)
-  const reachable: NodeId[] = []
+  const everywhere: NodeId[] = []
   let spread = 0
   for (let n = 0; n < g.nodes.length; n++) {
     if (Number.isFinite(fromStart.cost[n])) {
-      reachable.push(n)
+      everywhere.push(n)
       spread = Math.max(spread, fromStart.cost[n])
     }
   }
-  if (reachable.length < 20 || spread < g.cell * 8) return null // too small a place to race in
+  if (everywhere.length < 20 || spread < g.cell * 8) return null // too small a place to race in
+
+  // Gates, boxes and the flag go on open ground: not hard against a wall, in a crack or on a thin ledge, where on a real scan
+  // they end up half inside the furniture. (Falls back to everywhere if a room has almost no open ground.)
+  const open = openGround(g, everywhere)
+  const reachable = open.length >= 20 ? open : everywhere
+  const onOpenGround = new Set(reachable)
 
   const floorY = g.nodes[start].y
   const isUp = (n: NodeId) => g.nodes[n].y - floorY >= o.elevatedMin
@@ -133,7 +155,7 @@ export function generateCourse(g: Graph, spawn: Vec3, o: CourseOptions): Course 
     const i = Math.floor(leg.length * (0.3 + rng() * 0.4))
     const centre = leg[i]
     if (i < 2 || i > leg.length - 3) continue // reachSide looks two steps either way along the path
-    if (!free(centre, safe) || hazards.some((h) => Math.hypot(h.a[0] - g.nodes[centre].x, h.a[2] - g.nodes[centre].z) < safe * 1.2)) continue
+    if (!onOpenGround.has(centre) || !free(centre, safe) || hazards.some((h) => Math.hypot(h.a[0] - g.nodes[centre].x, h.a[2] - g.nodes[centre].z) < safe * 1.2)) continue
     const before = g.nodes[leg[i - 2]]
     const after = g.nodes[leg[i + 2]]
     const tx = after.x - before.x
@@ -160,7 +182,7 @@ export function generateCourse(g: Graph, spawn: Vec3, o: CourseOptions): Course 
   const items: CourseSpot[] = []
   const wanted = Math.max(3, order.length + 2)
   const tryItem = (n: NodeId): boolean => {
-    if (!free(n, g.cell * 3) || items.some((it) => flat(g, n, it.node) < g.cell * 4)) return false
+    if (!onOpenGround.has(n) || !free(n, g.cell * 3) || items.some((it) => flat(g, n, it.node) < g.cell * 4)) return false
     items.push({ node: n, pos: pos(g, n) })
     return true
   }
