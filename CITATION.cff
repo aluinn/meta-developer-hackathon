@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use Room world, please cite it as below."
+title: "Room world"
+abstract: "Turns a phone scan of a real room into a labelled 3D world you can race through or use to check clearances and rearrange furniture."
+type: software
+authors:
+  - family-names: McDonald
+    given-names: Aluinn
+  - family-names: Beaumont
+    given-names: Zac
+repository-code: "https://github.com/aluinn/meta-developer-hackathon"
+url: "https://room-world-server.onrender.com"
+license: MIT
+date-released: 2026-11-10
+keywords:
+  - 3D scanning
+  - accessibility
+  - three.js
+  - physics simulation
