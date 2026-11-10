@@ -1,65 +1,62 @@
+<div align="center">
+
 # Room world
 
-**Scan a real room with your phone. Get a labelled 3D world you can race through, or use to plan a layout that everyone can get around.**
+**Scan a real room with your phone and get a labelled 3D world you can race through, or use to check that everyone can get around it.**
 
-Built by Aluinn McDonald and Zac Beaumont for the Meta Global AI Developer Hackathon (Indie track).
+[![CI](https://github.com/aluinn/meta-developer-hackathon/actions/workflows/ci.yml/badge.svg)](https://github.com/aluinn/meta-developer-hackathon/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/aluinn/meta-developer-hackathon/actions/workflows/codeql.yml/badge.svg)](https://github.com/aluinn/meta-developer-hackathon/actions/workflows/codeql.yml)
+[![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/aluinn/meta-developer-hackathon?style=flat)](https://github.com/aluinn/meta-developer-hackathon/stargazers)
+[![Deploy to Render](https://img.shields.io/badge/deploy-Render-46e3b7.svg)](https://render.com/deploy?repo=https://github.com/aluinn/meta-developer-hackathon)
 
-**Try it: https://room-world-server.onrender.com** (no sign-in; the free host sleeps, so the first load can take a minute)
+<!--
+  HERO PLACEHOLDER: replace the screenshot below with a short screen recording (GIF or MP4) of
+  scan -> labelled room -> race, saved as e.g. docs/assets/room-world-demo.gif. Until then this is a real screenshot.
+-->
+<img src="docs/assets/rw-home.png" alt="Room world front page: Game mode on the left, Work mode on the right" width="860">
 
-Pipeline: phone scan -> server (Meta AI models + our own checks) -> `world.json` -> web app (three.js + Rapier physics).
+[**Try it live**](https://room-world-server.onrender.com) · [Deploy](docs/deployment.md) · [Architecture](docs/architecture.md) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md)
 
-## What it does
+</div>
 
-Upload a scan (`.glb`, or drag it onto the page) and the server finds the furniture, works out which pieces can move, be climbed or be walked over, and builds a labelled 3D world. Two ways to use it:
+Built by **Aluinn McDonald** and **Zac Beaumont** for the Meta Global AI Developer Hackathon (Indie track). The live site is on a free host that sleeps, so the first load can take about a minute. No sign-in.
 
-| | Game mode | Work mode |
+## Features
+
+- **Scan to world.** Upload a `.glb` or `.obj` room scan (up to 100 MB). The server finds the furniture, decides which pieces can move, be climbed or be walked over, and returns a `world.json` the browser turns into a 3D room.
+- **Game mode.** Race a tiny character through checkpoint gates, item boxes and patrolling hazards in your real room, with three lives, power-ups and fly mode. On a scan, the character runs on the scan's own triangles rather than on boxes.
+- **Make your own character.** Describe a hero in a few words and Muse Image draws one for Game mode.
+- **Work mode: clearance check.** Pick who is walking (0.5 m, 0.7 m, wheelchair 0.85 m, or any width). Plain code finds the widest route from Start to Goal, shows the route and the narrowest gap, and shows where it is blocked.
+- **Layout agent by voice or text.** Say "make room for a wheelchair". Speech becomes text, Muse Spark proposes moves for movable furniture, code validates them, and you get a new layout, a reason for each change, and before and after pictures.
+- **Scan match score.** How closely the simulated boxes match what SAM saw in the real scan. Plain code, no AI.
+- **Ready-made rooms, no key needed.** Zac's room and a studio apartment (real scans), a made-up example room, and a narrow-gap room with a 77 cm gap that blocks a wheelchair.
+- **Phone and laptop.** Touch controls and keyboard controls; scans are shrunk and one job runs at a time so it fits a free 512 MB host.
+
+## Screenshots
+
+| Game mode: pick a room | Work mode: studio apartment scan |
+|---|---|
+| <img src="docs/assets/rw-game-room.png" alt="Zac's room as a labelled 3D scan with Start and Goal markers"> | <img src="docs/assets/rw-work-studio.png" alt="Studio apartment scan with room size and object list"> |
+| **Work mode: layout panel** | **Work mode: narrow-gap room** |
+| <img src="docs/assets/rw-work-layout.png" alt="Layout panel with voice button, goal box and layout agent"> | <img src="docs/assets/rw-work-gap.png" alt="Narrow-gap room with the walking route and a 77 cm gap marked"> |
+
+<details>
+<summary>More: phone and play mode</summary>
+
+| Phone: front page | Phone: a scanned room | Play mode (Zac's room) |
 |---|---|---|
-| For | Fun: your room becomes a playground | Planning: is this room easy to move around in? |
-| What you do | Race a tiny character through gates, collect items, dodge hazards, with real physics on your real scan | Look at the labelled model, pick who is walking (Walking 0.5 m, Walker 0.7 m, Wheelchair 0.85 m, or any width) and see if they can get from Start to Goal |
-| Voice | | Say what you want ("make the route wide enough for a wheelchair") and the Layout agent proposes moves, checked by code, with before and after pictures |
-| Try without a scan | Zac's room (a real scan), or a made-up example room | A real studio apartment scan, or the narrow-gap room (a 77 cm gap that blocks a wheelchair) |
+| <img src="docs/assets/rw-phone-home.png" alt="Front page on a phone" width="240"> | <img src="docs/assets/rw-phone-room.png" alt="Scanned room on a phone" width="240"> | <img src="docs/assets/rw-game-play.png" alt="The character in play mode, with timer, gate counter and lives" width="320"> |
 
-Highlights:
-- **Real scan, real physics.** In a scan room the character runs on the scan's own triangles, not on boxes.
-- **Clearance check.** Plain code measures the widest person who can walk the best route, shows the route, the narrowest gap and where it is blocked, and says "no gaps narrower than 120 cm" once a layout is roomy.
-- **Layout agent by voice.** Speech -> text -> proposed moves -> validated moves -> a new world, with the reason for each change.
-- **Scan match score.** How closely the simulation matches the real scan (plain code, not AI).
-- **Make your own character** for Game mode from a short description.
-- **Runs on a phone and a laptop**, and on a free 512 MB host (scans are shrunk, one job runs at a time, each in its own process).
+Screenshots are taken with headless Chrome using software 3D rendering, so they look softer than on a real GPU.
 
-## AI tools used
+</details>
 
-### Meta models inside the running app (server side)
-
-Each model below is called somewhere in `/server` (checked in the code, not just planned). The key lives only in the server's `.env` / host secrets; the browser never sees it.
-
-| Model | What it does for us | Where |
-|---|---|---|
-| **SAM 3.1** (`sam-3.1`) | Finds and outlines furniture in the scan: we render 8 views of the room, ask for each kind of object, and project the outlines back onto the 3D mesh | `server/labelling/sam.py` |
-| **Muse Spark** (`muse-spark-1.3`) | Decides each object's role (fixed, movable, climbable, passable) and proposes new positions for the Layout agent, both as JSON | `server/labelling/roles.py`, `server/labelling/layout.py` |
-| **Muse Image** (`muse-image-1.0`) | Draws the before and after pictures of a layout change, and the player's character | `server/labelling/muse_image.py`, `server/photo_render.py`, `server/characters.py` |
-| **Muse Voice Transcribe** (`muse-voice-transcribe-1.0`) | Turns the spoken layout request into text | `server/transcribe.py` |
-
-### Development tool
-
-Code was written with help from **Claude Code** (Anthropic). All design decisions, testing and the final review were done by the two of us. Each session's log in [BUILD_LOG.md](BUILD_LOG.md) says what the AI helped with.
-
-### Principle: models propose, code checks
-
-Every model answer goes through our own validation before it reaches you:
-
-| Step | The model proposes | Our code enforces |
-|---|---|---|
-| Finding furniture | 2D outlines per view | Outlines are projected onto the 3D mesh; a surface needs votes from 2+ views, so one wrong view is outvoted |
-| Roles | A role and a confidence per object | The role must be one of the four; bad answers fall back to a low-confidence default; the result must match `shared/world.schema.json` |
-| Layout | New x/z positions (and turns) for movable objects | Only movable objects; inside the room; no overlaps; one retry with the problems as feedback, then reject |
-| Clearance | nothing | **The clearance check and the scan-match score are plain code. No AI is involved in those numbers.** |
-
-## How it fits together
+## How it works
 
 ```mermaid
 flowchart LR
-    scan["Phone scan (.glb)"] --> up["POST /scan<br/>shrink + simplify"]
+    scan["Phone scan (.glb / .obj)"] --> up["POST /scan<br/>shrink + simplify"]
     up --> sam["SAM 3.1<br/>find furniture"]
     sam --> spark["Muse Spark<br/>roles"]
     spark --> world[("world.json")]
@@ -71,94 +68,105 @@ flowchart LR
     layout --> img["Muse Image<br/>before / after"]
 ```
 
-`shared/world.schema.json` is the handover between server and web: metres, y up, a room, a list of objects (`id`, `label`, `role`, `confidence`, `position`, `size`, `rotation_y`), a spawn and a goal. The server writes it; the web app only reads it. More in [docs/architecture.md](docs/architecture.md).
+1. **Upload and shrink.** The server simplifies the scan so it fits a small host; each job runs in its own process so memory is returned afterwards.
+2. **Find and label.** It renders 8 views of the room, asks SAM 3.1 for each kind of furniture, and projects the outlines back onto the 3D mesh. A surface needs votes from 2 or more views, so one wrong view is outvoted. Muse Spark then gives each object a role.
+3. **One handover file.** The result is [`shared/world.schema.json`](shared/world.schema.json)-valid `world.json`: metres, y up, a room, objects (`id`, `label`, `role`, `confidence`, `position`, `size`, `rotation_y`), a spawn and a goal. The server writes it; the web app only reads it.
+4. **Models propose, code checks.** Every model answer is validated before it reaches you, and the clearance numbers and the match score involve no AI at all (table in [AI tools used](#ai-tools-used)). Full detail in [docs/architecture.md](docs/architecture.md).
 
-## Folders
-- `web/` - Vite + TypeScript app (three.js, Rapier)
-- `server/` - Python FastAPI server (the AI pipeline); serves the built website too
-- `shared/` - `world.schema.json` + `example_world.json` (the contract between the two)
-- `docs/` - architecture, deployment, demo script, character prompt
+## Quick start
 
-## Built with
-three.js, Rapier (physics), Vite, TypeScript; FastAPI, trimesh, NumPy/SciPy, Pillow; Docker on Render. Meta's models are reached through the OpenAI-compatible Meta API. Every library and asset with its licence is in [THIRD_PARTY.md](THIRD_PARTY.md). The art (including the character) is original.
+You need Git, Node.js (the checks here ran on v24; the Dockerfile builds with Node 22) and Python 3.11+ (checked on 3.12).
 
-## Setup (once)
+```bash
+git clone https://github.com/aluinn/meta-developer-hackathon.git
+cd meta-developer-hackathon
 
-Install these, then close and reopen your terminal:
+# Web app
+cd web && npm install && npm run dev        # http://localhost:5173
 
-| Tool | Mac | Windows |
+# Server (second terminal)
+cd server
+python3 -m venv .venv && source .venv/bin/activate      # Windows: py -m venv .venv ; .venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+cp ../.env.example .env                                  # then put your own MODEL_API_KEY in it
+uvicorn main:app --reload --port 8000                    # http://localhost:8000/health
+```
+
+The ready-made rooms work without a key or a server. Scanning, voice, the layout agent and the character maker need a `MODEL_API_KEY` from the [Meta developer portal](https://dev.meta.ai). Never commit `.env`. To try on a phone on the same Wi-Fi: `npm run dev -- --host`.
+
+| Command | Where | What it does |
 |---|---|---|
-| Git | `xcode-select --install` or https://git-scm.com | https://git-scm.com/download/win |
-| Node.js LTS | https://nodejs.org | https://nodejs.org |
-| Python 3.11+ | https://python.org/downloads | https://python.org/downloads (tick "Add to PATH") |
+| `npm run dev` | `web/` | Dev server with hot reload |
+| `npm run build` | `web/` | Type-check, then build to `web/dist` |
+| `npx tsc --noEmit` | `web/` | Type-check only |
+| `for f in scripts/test-*.ts; do node $f; done` | `web/` | Web logic tests (plain Node, no browser) |
+| `uvicorn main:app --reload --port 8000` | `server/` | API server (docs at `/docs`) |
+| `for f in scripts/test_*.py; do python $f; done` | `server/` | Server tests with fake AI answers: no key, no cost |
 
-Check: `git --version`, `node --version`, `python3 --version` (Windows: `py --version`).
+To run like the deployed site (one server for site and API): `cd web && npm run build`, then run `uvicorn main:app --port 8000` in `server/` and open http://localhost:8000.
 
-Clone and install:
+## Deploy
 
-    git clone https://github.com/aluinn/meta-developer-hackathon.git
-    cd meta-developer-hackathon
-    cd web && npm install && cd ..
+One Docker image serves the API and the website. [`render.yaml`](render.yaml) is a Render Blueprint: **New > Blueprint > pick this repo**, then set `MODEL_API_KEY` (and `ALLOWED_ORIGINS` only if the site is hosted elsewhere) in Render's dashboard. Step by step in [docs/deployment.md](docs/deployment.md).
 
-Server (Mac):
+## AI tools used
 
-    cd server
-    python3 -m venv .venv
-    source .venv/bin/activate
-    pip install -r requirements.txt
+### Meta models inside the running app (server side)
 
-Server (Windows PowerShell):
+Each model below is called somewhere in `/server`. The key lives only in the server's `.env` or host secrets; the browser never sees it.
 
-    cd server
-    py -m venv .venv
-    .venv\Scripts\Activate.ps1
-    pip install -r requirements.txt
+| Model | What it does here | Where |
+|---|---|---|
+| **SAM 3.1** (`sam-3.1`) | Finds and outlines furniture: 8 rendered views, one question per kind of object, outlines projected onto the 3D mesh | `server/labelling/sam.py` |
+| **Muse Spark** (`muse-spark-1.3`) | Decides each object's role (fixed, movable, climbable, passable) and proposes new positions for the Layout agent, both as JSON | `server/labelling/roles.py`, `server/labelling/layout.py` |
+| **Muse Image** (`muse-image-1.0`) | Draws before and after pictures of a layout change, and the player's character | `server/labelling/muse_image.py`, `server/photo_render.py`, `server/characters.py` |
+| **Muse Voice Transcribe** (`muse-voice-transcribe-1.0`) | Turns the spoken layout request into text | `server/transcribe.py` |
 
-If PowerShell blocks activation, run once: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+### Development tool
 
-API key: copy `.env.example` to `.env` and put in your own key (from the Meta developer portal). Never commit `.env`. Without a key the website still opens and the ready-made rooms work; scanning, voice and the Layout agent need the key.
+Code was written with help from **Claude Code** (Anthropic). Design decisions, testing and review were done by the two authors. Each session's log in [BUILD_LOG.md](BUILD_LOG.md) says what the AI helped with.
 
-## Run the web app
+### Models propose, code checks
 
-    cd web
-    npm run dev
+| Step | The model proposes | Our code enforces |
+|---|---|---|
+| Finding furniture | 2D outlines per view | Outlines projected onto the 3D mesh; a surface needs votes from 2+ views |
+| Roles | A role and a confidence per object | Must be one of the four roles; bad answers fall back to a low-confidence default; the result must match `shared/world.schema.json` |
+| Layout | New x/z positions (and turns) for movable objects | Only movable objects; inside the room; no overlaps; one retry with the problems as feedback, then reject |
+| Clearance | nothing | **The clearance check and the scan-match score are plain code. No AI is involved in those numbers.** |
 
-Open http://localhost:5173 - you should see "Room world".
-To try on your phone (same Wi-Fi): `npm run dev -- --host`, then open the "Network" URL shown.
-In development, the website sends its requests to the server on port 8000 (run the server too).
+## FAQ
 
-## Run the server
+**Do I need an API key?** Only for scanning your own room, voice, the Layout agent and the character maker. The four ready-made rooms and everything in the browser (viewer, play mode, clearance check) work without one.
 
-    cd server
-    source .venv/bin/activate      # Windows: .venv\Scripts\Activate.ps1
-    uvicorn main:app --reload --port 8000
+**What files can I scan with?** `.glb` or `.obj`, up to 100 MB. The project was built around phone LiDAR scans exported from an external scanning app; the scanning itself is not part of this repo.
 
-Open http://localhost:8000/health - you should see `{"status":"ok"}`. API test page: http://localhost:8000/docs
+**Is the clearance check a safety or accessibility assessment?** No. Sizes and positions come from phone scans and AI labelling, so they are estimates. It is a planning aid and does not replace a cane, a guide dog or a professional assessment.
 
-## Run everything as one server (like the deployed site)
+**Why did my scan find so few objects?** Only furniture the models can name is found, and objects are boxes. The two ready-made real scans show 2 objects each. Only `movable` objects move in a layout.
 
-    cd web && npm run build
-    cd ../server && source .venv/bin/activate && uvicorn main:app --port 8000
+**Why is it slow?** On the free host a layout takes 30 to 100 seconds, one scan is processed at a time, and large scans are shrunk to fit 512 MB. The first visit after a quiet spell wakes the server.
 
-Open http://localhost:8000: the website, with the API at the same address. Deployment (Docker on Render) is in [docs/deployment.md](docs/deployment.md).
+**Does it cost anything to run?** Each model call uses Meta API credits. The project docs record about $0.25 for one scan, about $0.01 per character drawing. Those are the team's own figures from the hackathon, not re-measured here.
 
-## Tests
+**Can I add a different scanner or model?** The contract is `world.json`. Anything that produces a schema-valid file can feed the web app.
 
-Web (plain Node, no browser needed), from `web/`:
+## Good first issues
 
-    npx tsc --noEmit
-    for f in scripts/test-*.ts; do node $f; done
+Drafts live in [`docs/issues/`](docs/issues/); see the folder for the current list.
 
-Server (these use fake AI answers, so they need no key and cost nothing), from `server/` with the venv active:
+## Roadmap
 
-    for f in scripts/test_*.py; do python $f; done
+See [ROADMAP.md](ROADMAP.md).
 
-## Honest limits
-- Sizes and positions come from phone scans and AI labelling: a planning aid, not a safety or accessibility assessment.
-- Only furniture the models can name is found; a scan can come back with few objects. Objects are boxes, and only movable ones move in a layout.
-- A layout takes 30 to 100 seconds on the free host.
-- The free host has 512 MB, so very large scans are shrunk, and one scan is processed at a time.
+## Credits
 
-## Working together
-Read [CONTRIBUTING.md](CONTRIBUTING.md). Log sessions in [BUILD_LOG.md](BUILD_LOG.md).
-Third-party licences: [THIRD_PARTY.md](THIRD_PARTY.md). Code is MIT-licensed ([LICENSE](LICENSE)).
+- **Authors:** Aluinn McDonald (server and AI pipeline) and Zac Beaumont (web app and simulation).
+- **Meta models:** SAM 3.1, Muse Spark, Muse Image, Muse Voice Transcribe, via [Meta's OpenAI-compatible API](https://dev.meta.ai).
+- **Libraries:** [three.js](https://threejs.org) (MIT), [Rapier](https://rapier.rs) (Apache-2.0), [Vite](https://vite.dev), [TypeScript](https://www.typescriptlang.org); [FastAPI](https://fastapi.tiangolo.com), [trimesh](https://trimesh.org), [NumPy](https://numpy.org), [SciPy](https://scipy.org), [Pillow](https://python-pillow.org). Every library with its licence is in [THIRD_PARTY.md](THIRD_PARTY.md).
+- **Art:** original. The character was generated with Muse Image from the prompt in [docs/character-prompt.md](docs/character-prompt.md). The two example rooms are the authors' own scans.
+- **Built with:** [Claude Code](https://claude.com/claude-code).
+
+## Licence
+
+[MIT](LICENSE) © 2026 Aluinn McDonald and Zac Beaumont.
