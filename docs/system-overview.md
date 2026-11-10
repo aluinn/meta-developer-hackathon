@@ -92,9 +92,9 @@ sequenceDiagram
 | Wrong file type, or over 100 MB | Rejected straight away with a plain message (400 / 413); the browser checks first | `web/src/api.ts`, `server/scans.py` |
 | No `MODEL_API_KEY` on the server | Scanning, voice, layout and character return 503 / `no_key`; the ready-made rooms still work | `server/jobs.py` |
 | SAM finds no furniture | Job ends with `no_objects` and a plain-English message | `server/jobs.py` |
-| A few SAM questions fail | Tolerated if under a quarter; each request has a timeout and 2 retries | `server/labelling/sam.py` |
+| A few SAM questions fail | Tolerated up to a quarter of them (the job gives up beyond that); each request has a 45 s timeout and 2 retries | `server/labelling/pipeline.py`, `sam.py` |
 | Meta API trouble | `ai_service` error shown on the Upload screen | `server/jobs.py` |
-| Worker killed (out of memory) | Job reports `out_of_memory` instead of taking the server down | `server/labelling/worker.py` |
+| Worker killed (out of memory) | Job reports `out_of_memory` instead of taking the server down | `server/jobs.py` |
 | Worker hangs | Killed after 10 minutes | `server/jobs.py` |
 | Server restarts mid-job | Status answers 404; the website says the server restarted | `web/src/api.ts` |
 | Layout proposal breaks the rules | One retry with the problems as feedback, then 422 and nothing changes | `server/labelling/layout.py` |
