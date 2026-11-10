@@ -1,7 +1,7 @@
 # One image that serves the API and the website (build context = repo root).
 
 # --- stage 1: build the web app (Vite). It imports ../../shared/*.json, so shared/ sits next to web/.
-FROM node:22-slim AS webbuild
+FROM node:26-slim AS webbuild
 WORKDIR /build
 COPY web/package.json web/package-lock.json web/
 RUN cd web && npm ci
