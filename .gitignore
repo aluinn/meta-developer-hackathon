@@ -30,3 +30,7 @@ build/
 
 # Uploaded scans (server)
 server/scans/
+
+# Playwright
+web/test-results/
+web/playwright-report/
