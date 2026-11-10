@@ -12,6 +12,12 @@ Add a new entry at the TOP after each work session. Copy the template.
 - Next:
 ```
 
+## 2026-11-10 - Aluinn
+- What I did: open-source polish on branch `docs/open-source-polish`: real screenshots, restructured README, community files (contributing, code of conduct, security, changelog, roadmap, citation, templates, Dependabot), docs (system overview, clearance explainer, data sources, performance with benchmark scripts), nine issue drafts in `docs/issues/`, CI and CodeQL workflows, a Playwright smoke test, `npm test`, package metadata.
+- What worked / what didn't: typecheck, all 8 web test files, all 11 server tests, the build and the smoke test pass locally, also on a fresh clone. ESLint was not added: typescript-eslint does not support TypeScript 7 yet. CI on GitHub was not yet confirmed when this was written.
+- AI tools used (and for what): Claude Code wrote the docs, workflows and test config; the two authors review and decide.
+- Next: open the PR, confirm CI passes, set the repo description, topics and website in GitHub's About box.
+
 ## 2026-11-04 - Aluinn (README rewrite, AI tools used)
 - What I did: Rewrote `README.md` for judges: what it does (Game and Work mode), the live link, an "AI tools used" section, the models-propose-code-checks table, a diagram, setup, tests and honest limits. No code changed.
 - What worked / what didn't: Checked in `/server` that all four models are really called: SAM 3.1 (`labelling/sam.py`), Muse Spark (`roles.py`, `layout.py`), Muse Image (`muse_image.py`, used by `/render` and `/character`) and Muse Voice Transcribe (`transcribe.py`). The clearance check and scan-match score make no model calls. Not run for real in this session: voice from a browser microphone.

@@ -9,6 +9,7 @@ Check the licence of anything new BEFORE adding it, then list it here.
 | vite | web (dev tool) | MIT |
 | typescript | web (dev tool) | Apache-2.0 |
 | @types/three | web (dev tool) | MIT |
+| @playwright/test | web (dev tool: end-to-end smoke test, not shipped) | Apache-2.0 |
 | fastapi | server | MIT |
 | uvicorn | server | BSD-3-Clause |
 | jsonschema | server | MIT |

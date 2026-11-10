@@ -1,0 +1,35 @@
+name: Bug report
+description: Something is broken or behaves unexpectedly
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. Open the site\n2. Click ...\n3. See ..."
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where did it happen?
+      options: [Live site, Running locally (dev server), Running locally (one server), Tests]
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Browser / device / OS
+      placeholder: Chrome 130 on macOS, iPhone 15 Safari
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots, console errors or the scan you used
+      description: Please do not paste API keys. Do not attach scans of private places.
