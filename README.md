@@ -71,7 +71,7 @@ flowchart LR
 1. **Upload and shrink.** The server simplifies the scan so it fits a small host; each job runs in its own process so memory is returned afterwards.
 2. **Find and label.** It renders 8 views of the room, asks SAM 3.1 for each kind of furniture, and projects the outlines back onto the 3D mesh. A surface needs votes from 2 or more views, so one wrong view is outvoted. Muse Spark then gives each object a role.
 3. **One handover file.** The result is [`shared/world.schema.json`](shared/world.schema.json)-valid `world.json`: metres, y up, a room, objects (`id`, `label`, `role`, `confidence`, `position`, `size`, `rotation_y`), a spawn and a goal. The server writes it; the web app only reads it.
-4. **Models propose, code checks.** Every model answer is validated before it reaches you, and the clearance numbers and the match score involve no AI at all (table in [AI tools used](#ai-tools-used)). Full detail in [docs/architecture.md](docs/architecture.md).
+4. **Models propose, code checks.** Every model answer is validated before it reaches you, and the clearance numbers and the match score involve no AI at all (table in [AI tools used](#ai-tools-used)). Full detail in [docs/architecture.md](docs/architecture.md), with a shorter tour and the failure modes in [docs/system-overview.md](docs/system-overview.md); the clearance maths is in [docs/clearance.md](docs/clearance.md).
 
 ## Quick start
 
@@ -153,7 +153,19 @@ Code was written with help from **Claude Code** (Anthropic). Design decisions, t
 
 ## Good first issues
 
-Drafts live in [`docs/issues/`](docs/issues/); see the folder for the current list.
+Drafts live in [`docs/issues/`](docs/issues/); copy one into a new issue, or ask for it to be opened.
+
+| Issue draft | Label |
+|---|---|
+| [Add a "child" person preset](docs/issues/01-child-width-preset.md) | good first issue |
+| [Unit tests for `formatSize`](docs/issues/02-test-format-size.md) | good first issue |
+| [Document `world.json` field by field](docs/issues/03-document-world-json.md) | good first issue |
+| [Record a demo GIF for the README](docs/issues/04-record-demo-gif.md) | good first issue |
+| [Send `min_clearance_m` from the website](docs/issues/05-send-min-clearance.md) | enhancement |
+| [Delete old scans automatically](docs/issues/06-expire-old-scans.md) | enhancement |
+| [Show low-confidence objects differently](docs/issues/07-show-confidence.md) | enhancement |
+| [Download the current `world.json`](docs/issues/08-download-world-json.md) | enhancement |
+| [Test `/transcribe` on real speech and WebM](docs/issues/09-test-transcribe-webm.md) | enhancement |
 
 ## Roadmap
 
