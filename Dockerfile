@@ -10,7 +10,7 @@ COPY shared/ shared/
 RUN cd web && npm run build
 
 # --- stage 2: the Python server, plus the built site
-FROM python:3.12-slim
+FROM python:3.15-slim
 
 # ffmpeg lets POST /transcribe convert browser audio (WebM/Ogg/MP4) to WAV.
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
